@@ -220,6 +220,11 @@ fn route_messages(world: &mut World) {
 
 #[derive(Clone, Copy, Resource)]
 pub struct LocalId(Option<PeerId>);
+impl LocalId {
+    pub fn get(&self) -> Option<PeerId> {
+        self.0
+    }
+}
 impl std::ops::Deref for LocalId {
     type Target = Option<PeerId>;
 
