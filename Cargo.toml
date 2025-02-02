@@ -3,7 +3,7 @@ name = "evnet"
 version = "0.1.0-rc1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "An event driven peer to peer networking plugin built ontop of bevy_matchbox and webrtc"
+description = "An event driven peer to peer networking plugin for bevy built ontop of bevy_matchbox and webrtc"
 repository = "https://github.com/MalekiRe/aeronet"
 
 [dependencies]
