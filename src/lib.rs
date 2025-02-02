@@ -218,6 +218,17 @@ fn route_messages(world: &mut World) {
         .update_peers();
 }
 
+#[derive(Resource)]
+pub struct LocalId(Option<PeerId>);
+
+fn local_id_set(mut local_id: ResMut<LocalId>, matchbox_socket: Option<ResMut<MatchboxSocket>>) {
+    if let Some(mut matchbox_socket) = matchbox_socket {
+        local_id.0 = matchbox_socket.id();
+    } else {
+        local_id.0.take();
+    }
+}
+
 // Plugin implementation and app extension
 //----------------------------------------
 
@@ -225,7 +236,7 @@ pub struct AeronetPlugin;
 
 impl Plugin for AeronetPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, route_messages);
+        app.add_systems(Update, (local_id_set, route_messages).chain());
         app.init_resource::<NetworkedMessages>();
     }
 }
