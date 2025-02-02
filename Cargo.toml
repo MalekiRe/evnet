@@ -1,0 +1,11 @@
+[package]
+name = "aeronet"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+bevy = "0.15.1"
+bevy_matchbox = "0.11.0"
+futures = "0.3.31"
+serde = { version = "1.0.217", features = ["derive"] }
+bincode = "1.3.3"
