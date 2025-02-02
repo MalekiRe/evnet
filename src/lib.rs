@@ -24,8 +24,8 @@ pub trait NetworkedEvent {
 
 #[derive(Serialize, Deserialize)]
 pub struct Message {
-    type_name: String,
-    content: Vec<u8>,
+    pub type_name: String,
+    pub content: Vec<u8>,
 }
 impl Message {
     pub fn new<T: Serialize + TypePath>(content: &T) -> Self {
@@ -96,9 +96,7 @@ impl SocketSendMessage for WebRtcSocket {
         self.channel_mut(0)
             .receive()
             .into_iter()
-            .map(|(id, packet)| {
-                (id, bincode::deserialize(&packet).unwrap())
-            })
+            .map(|(id, packet)| (id, bincode::deserialize(&packet).unwrap()))
             .collect()
     }
 
@@ -106,9 +104,7 @@ impl SocketSendMessage for WebRtcSocket {
         self.channel_mut(1)
             .receive()
             .into_iter()
-            .map(|(id, packet)| {
-                (id, bincode::deserialize(&packet).unwrap())
-            })
+            .map(|(id, packet)| (id, bincode::deserialize(&packet).unwrap()))
             .collect()
     }
 
@@ -262,5 +258,22 @@ impl NetworkedAppExt for App {
             ),
         );
         self
+    }
+}
+
+pub trait NetworkedCommandExt {
+    fn connect(&mut self, room: &str);
+}
+
+impl NetworkedCommandExt for Commands<'_, '_> {
+    fn connect(&mut self, room_url: &str) {
+        let matchbox = MatchboxSocket::from(
+            //example: "wss://mb.v-sekai.cloud/my-room-1"
+            bevy_matchbox::matchbox_socket::WebRtcSocketBuilder::new(room_url)
+                .add_reliable_channel()
+                .add_unreliable_channel()
+                .build(),
+        );
+        self.insert_resource(matchbox);
     }
 }
