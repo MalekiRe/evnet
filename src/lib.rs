@@ -218,8 +218,15 @@ fn route_messages(world: &mut World) {
         .update_peers();
 }
 
-#[derive(Resource)]
+#[derive(Clone, Copy, Resource)]
 pub struct LocalId(Option<PeerId>);
+impl std::ops::Deref for LocalId {
+    type Target = Option<PeerId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 fn local_id_set(mut local_id: ResMut<LocalId>, matchbox_socket: Option<ResMut<MatchboxSocket>>) {
     if let Some(mut matchbox_socket) = matchbox_socket {
@@ -232,9 +239,9 @@ fn local_id_set(mut local_id: ResMut<LocalId>, matchbox_socket: Option<ResMut<Ma
 // Plugin implementation and app extension
 //----------------------------------------
 
-pub struct AeronetPlugin;
+pub struct EvnetPlugin;
 
-impl Plugin for AeronetPlugin {
+impl Plugin for EvnetPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (local_id_set, route_messages).chain());
         app.init_resource::<NetworkedMessages>();
