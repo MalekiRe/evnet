@@ -3,3 +3,4 @@ vcs.xml
 modules.xml
 aeronet.iml
 /.idea/modules.xml
+.idea/.gitignore
