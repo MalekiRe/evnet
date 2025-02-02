@@ -218,7 +218,7 @@ fn route_messages(world: &mut World) {
         .update_peers();
 }
 
-#[derive(Clone, Copy, Resource)]
+#[derive(Clone, Copy, Resource, Default)]
 pub struct LocalId(Option<PeerId>);
 impl LocalId {
     pub fn get(&self) -> Option<PeerId> {
@@ -250,6 +250,7 @@ impl Plugin for EvnetPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (local_id_set, route_messages).chain());
         app.init_resource::<NetworkedMessages>();
+        app.init_resource::<LocalId>();
     }
 }
 
