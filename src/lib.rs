@@ -19,7 +19,7 @@ impl Reliability {
     pub const RELIABILITY: [Reliability; 3] = [
         Reliability::Reliable,
         Reliability::Unreliable,
-        Reliability::Reliable,
+        Reliability::UnreliableOrdered,
     ];
 }
 
@@ -98,13 +98,7 @@ impl SocketSendMessage for WebRtcSocket {
 
 #[derive(Default, Resource)]
 pub struct NetworkedMessages(
-    std::collections::HashMap<
-        String,
-        (
-            Box<dyn Fn(&mut World, &[u8]) + Send + Sync + 'static>,
-            Box<dyn Fn(&mut World) + Send + Sync + 'static>,
-        ),
-    >,
+    std::collections::HashMap<String, (fn(&mut World, &[u8]), fn(&mut World))>,
 );
 
 fn route_outgoing_messages<
@@ -211,10 +205,7 @@ impl NetworkedAppExt for App {
         let mut networked_messages = self.world_mut().resource_mut::<NetworkedMessages>();
         networked_messages.0.insert(
             T::type_path().to_string(),
-            (
-                Box::new(route_incoming_messages::<T>),
-                Box::new(route_outgoing_messages::<T>),
-            ),
+            (route_incoming_messages::<T>, route_outgoing_messages::<T>),
         );
         self
     }
