@@ -1,7 +1,7 @@
 // lib.rs or networking.rs
 use bevy::app::App;
 use bevy::prelude::*;
-use bevy_matchbox::matchbox_socket::WebRtcSocket;
+use bevy_matchbox::matchbox_socket::{ChannelConfig, WebRtcSocket};
 use bevy_matchbox::prelude::PeerId;
 use bevy_matchbox::MatchboxSocket;
 use futures::channel::mpsc::SendError;
@@ -13,13 +13,14 @@ use std::collections::HashMap;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Reliability {
-    Reliable,
-    Unreliable,
+    Reliable = 0,
+    Unreliable = 1,
+    UnreliableOrdered = 2,
 }
 
 pub trait NetworkedEvent {
+    const RELIABILITY: Reliability;
     fn id(&self) -> PeerId;
-    fn reliable(&self) -> Reliability;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,113 +41,85 @@ impl Message {
 //----------------------------------------
 
 pub trait SocketSendMessage {
-    fn send_msg_unreliable<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         peer: PeerId,
         message: &T,
+        reliability: Reliability,
     );
-    fn send_msg_reliable<T: Serialize + TypePath + Event + NetworkedEvent>(
-        &mut self,
-        peer: PeerId,
-        message: &T,
-    );
-    fn receive_msg_reliable(&mut self) -> Vec<(PeerId, Message)>;
-    fn receive_msg_unreliable(&mut self) -> Vec<(PeerId, Message)>;
-    fn send_msg_all_reliable<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         message: &T,
+        reliability: Reliability,
     );
-    fn send_msg_all_unreliable<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn receive_msg(&mut self, reliability: Reliability) -> Vec<(PeerId, Message)>;
+    fn try_send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         message: &T,
-    );
-    fn try_send_msg_all_reliable<T: Serialize + TypePath + Event + NetworkedEvent>(
-        &mut self,
-        message: &T,
+        reliability: Reliability,
     ) -> Result<(), SendError>;
-    fn try_send_msg_reliable<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn try_send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         peer: PeerId,
         message: &T,
+        reliability: Reliability,
     ) -> Result<(), SendError>;
 }
 
 impl SocketSendMessage for WebRtcSocket {
-    fn send_msg_unreliable<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         peer: PeerId,
         message: &T,
+        reliability: Reliability,
     ) {
         let msg = Message::new(message);
         let msg = bincode::serialize(&msg).unwrap();
-        self.channel_mut(1).send(msg.into(), peer);
+        self.channel_mut(reliability as usize)
+            .send(msg.into(), peer);
     }
 
-    fn send_msg_reliable<T: Serialize + TypePath + Event + NetworkedEvent>(
-        &mut self,
-        peer: PeerId,
-        message: &T,
-    ) {
-        let msg = Message::new(message);
-        let msg = bincode::serialize(&msg).unwrap();
-        self.channel_mut(0).send(msg.into(), peer);
-    }
-
-    fn receive_msg_reliable(&mut self) -> Vec<(PeerId, Message)> {
-        self.channel_mut(0)
+    fn receive_msg(&mut self, reliability: Reliability) -> Vec<(PeerId, Message)> {
+        self.channel_mut(reliability as usize)
             .receive()
             .into_iter()
             .map(|(id, packet)| (id, bincode::deserialize(&packet).unwrap()))
             .collect()
     }
 
-    fn receive_msg_unreliable(&mut self) -> Vec<(PeerId, Message)> {
-        self.channel_mut(1)
-            .receive()
-            .into_iter()
-            .map(|(id, packet)| (id, bincode::deserialize(&packet).unwrap()))
-            .collect()
-    }
-
-    fn send_msg_all_reliable<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         message: &T,
+        reliability: Reliability,
     ) {
         let peers = self.connected_peers().collect::<Vec<_>>();
         for peer in peers {
-            self.send_msg_reliable(peer, message);
+            self.send_msg(peer, message, reliability);
         }
     }
 
-    fn send_msg_all_unreliable<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn try_send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         message: &T,
-    ) {
-        let peers = self.connected_peers().collect::<Vec<_>>();
-        for peer in peers {
-            self.send_msg_unreliable(peer, message);
-        }
-    }
-
-    fn try_send_msg_all_reliable<T: Serialize + TypePath + Event + NetworkedEvent>(
-        &mut self,
-        message: &T,
+        reliability: Reliability,
     ) -> Result<(), SendError> {
         let peers = self.connected_peers().collect::<Vec<_>>();
         for peer in peers {
-            self.try_send_msg_reliable(peer, message)?;
+            self.try_send_msg(peer, message, reliability)?;
         }
         Ok(())
     }
 
-    fn try_send_msg_reliable<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn try_send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         peer: PeerId,
         message: &T,
+        reliability: Reliability,
     ) -> Result<(), SendError> {
         let msg = Message::new(message);
         let msg = bincode::serialize(&msg).unwrap();
-        self.channel_mut(0).try_send(msg.into(), peer)?;
+        self.channel_mut(reliability as usize)
+            .try_send(msg.into(), peer)?;
         Ok(())
     }
 }
@@ -175,10 +148,7 @@ fn route_outgoing_messages<
         let mut cursor = events.get_cursor();
         for e in cursor.read(&events) {
             if e.id() == socket.id().unwrap() {
-                match e.reliable() {
-                    Reliability::Reliable => socket.send_msg_all_reliable(e),
-                    Reliability::Unreliable => socket.send_msg_all_unreliable(e),
-                }
+                socket.send_msg_all(e, T::RELIABILITY);
             }
         }
     });
@@ -199,11 +169,12 @@ fn route_messages(world: &mut World) {
 
     world.resource_scope(|world, networked_messages: Mut<NetworkedMessages>| {
         world.resource_scope(|world, mut socket: Mut<MatchboxSocket>| {
-            for (_peer_id, msg) in socket.receive_msg_reliable() {
-                let func = networked_messages.0.get(&msg.type_name).unwrap();
-                func.0(world, &msg.content);
-            }
-            for (_peer_id, msg) in socket.receive_msg_unreliable() {
+            for (_peer_id, msg) in socket
+                .receive_msg(Reliability::Reliable)
+                .into_iter()
+                .chain(socket.receive_msg(Reliability::Unreliable))
+                .chain(socket.receive_msg(Reliability::UnreliableOrdered))
+            {
                 let func = networked_messages.0.get(&msg.type_name).unwrap();
                 func.0(world, &msg.content);
             }
@@ -296,6 +267,10 @@ impl NetworkedCommandExt for Commands<'_, '_> {
             bevy_matchbox::matchbox_socket::WebRtcSocketBuilder::new(room_url)
                 .add_reliable_channel()
                 .add_unreliable_channel()
+                .add_channel(ChannelConfig {
+                    ordered: true,
+                    max_retransmits: Some(0),
+                })
                 .build(),
         );
         self.insert_resource(matchbox);
