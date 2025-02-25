@@ -6,8 +6,6 @@ use bevy_matchbox::prelude::PeerId;
 use bevy_matchbox::MatchboxSocket;
 use futures::channel::mpsc::SendError;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
 // Core traits and types
 //----------------------------------------
 
@@ -16,6 +14,13 @@ pub enum Reliability {
     Reliable = 0,
     Unreliable = 1,
     UnreliableOrdered = 2,
+}
+impl Reliability {
+    pub const RELIABILITY: [Reliability; 3] = [
+        Reliability::Reliable,
+        Reliability::Unreliable,
+        Reliability::Reliable,
+    ];
 }
 
 pub trait NetworkedEvent {
@@ -41,24 +46,13 @@ impl Message {
 //----------------------------------------
 
 pub trait SocketSendMessage {
-    fn send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
-        &mut self,
-        peer: PeerId,
-        message: &T,
-        reliability: Reliability,
-    );
+    fn receive_msg(&mut self, reliability: Reliability) -> impl Iterator<Item = (PeerId, Message)>;
     fn send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         message: &T,
         reliability: Reliability,
-    );
-    fn receive_msg(&mut self, reliability: Reliability) -> Vec<(PeerId, Message)>;
-    fn try_send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
-        &mut self,
-        message: &T,
-        reliability: Reliability,
     ) -> Result<(), SendError>;
-    fn try_send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         peer: PeerId,
         message: &T,
@@ -67,50 +61,25 @@ pub trait SocketSendMessage {
 }
 
 impl SocketSendMessage for WebRtcSocket {
-    fn send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
-        &mut self,
-        peer: PeerId,
-        message: &T,
-        reliability: Reliability,
-    ) {
-        let msg = Message::new(message);
-        let msg = bincode::serialize(&msg).unwrap();
-        self.channel_mut(reliability as usize)
-            .send(msg.into(), peer);
-    }
-
-    fn receive_msg(&mut self, reliability: Reliability) -> Vec<(PeerId, Message)> {
+    fn receive_msg(&mut self, reliability: Reliability) -> impl Iterator<Item = (PeerId, Message)> {
         self.channel_mut(reliability as usize)
             .receive()
             .into_iter()
             .map(|(id, packet)| (id, bincode::deserialize(&packet).unwrap()))
-            .collect()
     }
-
     fn send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
-        &mut self,
-        message: &T,
-        reliability: Reliability,
-    ) {
-        let peers = self.connected_peers().collect::<Vec<_>>();
-        for peer in peers {
-            self.send_msg(peer, message, reliability);
-        }
-    }
-
-    fn try_send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         message: &T,
         reliability: Reliability,
     ) -> Result<(), SendError> {
         let peers = self.connected_peers().collect::<Vec<_>>();
         for peer in peers {
-            self.try_send_msg(peer, message, reliability)?;
+            self.send_msg(peer, message, reliability)?;
         }
         Ok(())
     }
 
-    fn try_send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
         &mut self,
         peer: PeerId,
         message: &T,
@@ -129,7 +98,7 @@ impl SocketSendMessage for WebRtcSocket {
 
 #[derive(Default, Resource)]
 pub struct NetworkedMessages(
-    HashMap<
+    std::collections::HashMap<
         String,
         (
             Box<dyn Fn(&mut World, &[u8]) + Send + Sync + 'static>,
@@ -144,11 +113,13 @@ fn route_outgoing_messages<
     world: &mut World,
 ) {
     world.resource_scope(|world, mut socket: Mut<MatchboxSocket>| {
-        let events = world.get_resource_mut::<Events<T>>().unwrap();
+        let events = world.resource_mut::<Events<T>>();
         let mut cursor = events.get_cursor();
         for e in cursor.read(&events) {
-            if e.id() == socket.id().unwrap() {
-                socket.send_msg_all(e, T::RELIABILITY);
+            if e.id() == socket.id().expect("Not connected") {
+                if let Err(err) = socket.send_msg_all(e, T::RELIABILITY) {
+                    error!("Failed to send message: {:?}", err);
+                }
             }
         }
     });
@@ -169,14 +140,11 @@ fn route_messages(world: &mut World) {
 
     world.resource_scope(|world, networked_messages: Mut<NetworkedMessages>| {
         world.resource_scope(|world, mut socket: Mut<MatchboxSocket>| {
-            for (_peer_id, msg) in socket
-                .receive_msg(Reliability::Reliable)
-                .into_iter()
-                .chain(socket.receive_msg(Reliability::Unreliable))
-                .chain(socket.receive_msg(Reliability::UnreliableOrdered))
-            {
-                let func = networked_messages.0.get(&msg.type_name).unwrap();
-                func.0(world, &msg.content);
+            for reliability in Reliability::RELIABILITY {
+                for (_peer_id, msg) in socket.receive_msg(reliability) {
+                    let func = networked_messages.0.get(&msg.type_name).unwrap();
+                    func.0(world, &msg.content);
+                }
             }
         });
         for (_, route_outgoing_messages) in networked_messages.0.values() {
@@ -240,11 +208,7 @@ impl NetworkedAppExt for App {
         &mut self,
     ) -> &mut Self {
         self.init_resource::<NetworkedMessages>();
-        let mut networked_messages = self
-            .main_mut()
-            .world_mut()
-            .get_resource_mut::<NetworkedMessages>()
-            .unwrap();
+        let mut networked_messages = self.world_mut().resource_mut::<NetworkedMessages>();
         networked_messages.0.insert(
             T::type_path().to_string(),
             (
@@ -268,6 +232,7 @@ impl NetworkedCommandExt for Commands<'_, '_> {
                 .add_reliable_channel()
                 .add_unreliable_channel()
                 .add_channel(ChannelConfig {
+                    // UnreliableOrdered
                     ordered: true,
                     max_retransmits: Some(0),
                 })
