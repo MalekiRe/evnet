@@ -1,4 +1,3 @@
-// lib.rs or networking.rs
 use bevy::app::App;
 use bevy::prelude::*;
 use bevy_matchbox::matchbox_socket::{ChannelConfig, WebRtcSocket};
@@ -30,13 +29,13 @@ pub trait NetworkedEvent {
 
 #[derive(Serialize, Deserialize)]
 pub struct Message {
-    pub type_name: String,
+    pub type_path_hash: u32,
     pub content: Vec<u8>,
 }
 impl Message {
-    pub fn new<T: Serialize + TypePath>(content: &T) -> Self {
+    pub fn new<T: Serialize>(content: &T) -> Self {
         Message {
-            type_name: T::type_path().to_string(),
+            type_path_hash: const_fnv1a_hash::fnv1a_hash_str_32(std::any::type_name::<T>()),
             content: bincode::serialize(content).unwrap(),
         }
     }
@@ -47,16 +46,15 @@ impl Message {
 
 pub trait SocketSendMessage {
     fn receive_msg(&mut self, reliability: Reliability) -> impl Iterator<Item = (PeerId, Message)>;
-    fn send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg_all<T: Serialize + Event + NetworkedEvent>(
         &mut self,
         message: &T,
-        reliability: Reliability,
+        peers: &[PeerId],
     ) -> Result<(), SendError>;
-    fn send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg<T: Serialize + Event + NetworkedEvent>(
         &mut self,
         peer: PeerId,
         message: &T,
-        reliability: Reliability,
     ) -> Result<(), SendError>;
 }
 
@@ -67,27 +65,25 @@ impl SocketSendMessage for WebRtcSocket {
             .into_iter()
             .map(|(id, packet)| (id, bincode::deserialize(&packet).unwrap()))
     }
-    fn send_msg_all<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg_all<T: Serialize + Event + NetworkedEvent>(
         &mut self,
         message: &T,
-        reliability: Reliability,
+        peers: &[PeerId],
     ) -> Result<(), SendError> {
-        let peers = self.connected_peers().collect::<Vec<_>>();
         for peer in peers {
-            self.send_msg(peer, message, reliability)?;
+            self.send_msg(*peer, message)?;
         }
         Ok(())
     }
 
-    fn send_msg<T: Serialize + TypePath + Event + NetworkedEvent>(
+    fn send_msg<T: Serialize + Event + NetworkedEvent>(
         &mut self,
         peer: PeerId,
         message: &T,
-        reliability: Reliability,
     ) -> Result<(), SendError> {
         let msg = Message::new(message);
         let msg = bincode::serialize(&msg).unwrap();
-        self.channel_mut(reliability as usize)
+        self.channel_mut(T::RELIABILITY as usize)
             .try_send(msg.into(), peer)?;
         Ok(())
     }
@@ -98,20 +94,20 @@ impl SocketSendMessage for WebRtcSocket {
 
 #[derive(Default, Resource)]
 pub struct NetworkedMessages(
-    std::collections::HashMap<String, (fn(&mut World, &[u8]), fn(&mut World))>,
+    //v Route Incoming    //v Route Outgoing
+    std::collections::HashMap<u32, (fn(&mut World, &[u8]), fn(&mut World))>,
 );
 
-fn route_outgoing_messages<
-    T: NetworkedEvent + Event + Serialize + for<'a> Deserialize<'a> + TypePath,
->(
+fn route_outgoing_messages<T: NetworkedEvent + Event + Serialize + for<'a> Deserialize<'a>>(
     world: &mut World,
 ) {
     world.resource_scope(|world, mut socket: Mut<MatchboxSocket>| {
+        let peers = socket.connected_peers().collect::<Vec<_>>();
         let events = world.resource_mut::<Events<T>>();
         let mut cursor = events.get_cursor();
         for e in cursor.read(&events) {
             if e.id() == socket.id().expect("Not connected") {
-                if let Err(err) = socket.send_msg_all(e, T::RELIABILITY) {
+                if let Err(err) = socket.send_msg_all(e, &peers) {
                     error!("Failed to send message: {:?}", err);
                 }
             }
@@ -136,8 +132,9 @@ fn route_messages(world: &mut World) {
         world.resource_scope(|world, mut socket: Mut<MatchboxSocket>| {
             for reliability in Reliability::RELIABILITY {
                 for (_peer_id, msg) in socket.receive_msg(reliability) {
-                    let func = networked_messages.0.get(&msg.type_name).unwrap();
-                    func.0(world, &msg.content);
+                    let route_incoming_messages =
+                        networked_messages.0.get(&msg.type_path_hash).unwrap().0;
+                    route_incoming_messages(world, &msg.content);
                 }
             }
         });
@@ -176,11 +173,30 @@ fn local_id_set(mut local_id: ResMut<LocalId>, matchbox_socket: Option<ResMut<Ma
 
 // Plugin implementation and app extension
 //----------------------------------------
+#[derive(Default)]
+pub struct EvnetPlugin {
+    url: Option<String>,
+}
 
-pub struct EvnetPlugin;
+impl EvnetPlugin {
+    pub fn new() -> Self {
+        Self { url: None }
+    }
+    pub fn with_connection(url: impl AsRef<str>) -> Self {
+        Self {
+            url: Some(url.as_ref().to_string()),
+        }
+    }
+}
 
 impl Plugin for EvnetPlugin {
     fn build(&self, app: &mut App) {
+        if let Some(url) = &self.url {
+            let url = url.clone();
+            app.add_systems(Startup, move |mut commands: Commands| {
+                commands.connect(&url);
+            });
+        }
         app.add_systems(Update, (local_id_set, route_messages).chain());
         app.init_resource::<NetworkedMessages>();
         app.init_resource::<LocalId>();
@@ -188,23 +204,20 @@ impl Plugin for EvnetPlugin {
 }
 
 pub trait NetworkedAppExt {
-    fn register_networked_event<
-        T: NetworkedEvent + Event + for<'a> Deserialize<'a> + Serialize + TypePath,
-    >(
+    fn register_networked_event<T: NetworkedEvent + Event + for<'a> Deserialize<'a> + Serialize>(
         &mut self,
     ) -> &mut Self;
 }
 
 impl NetworkedAppExt for App {
-    fn register_networked_event<
-        T: NetworkedEvent + Event + for<'a> Deserialize<'a> + Serialize + TypePath,
-    >(
+    fn register_networked_event<T: NetworkedEvent + Event + for<'a> Deserialize<'a> + Serialize>(
         &mut self,
     ) -> &mut Self {
+        self.add_event::<T>();
         self.init_resource::<NetworkedMessages>();
         let mut networked_messages = self.world_mut().resource_mut::<NetworkedMessages>();
         networked_messages.0.insert(
-            T::type_path().to_string(),
+            const_fnv1a_hash::fnv1a_hash_str_32(std::any::type_name::<T>()),
             (route_incoming_messages::<T>, route_outgoing_messages::<T>),
         );
         self
