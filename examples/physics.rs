@@ -1,7 +1,7 @@
 use avian3d::prelude::*;
 use bevy::asset::AssetContainer;
 use bevy::prelude::*;
-use evnet::component_sync_layer::{LocalNet, SyncNet};
+use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, SyncNet};
 use evnet::event_layer::{AppExt2, NetworkEvent};
 use evnet::message_layer::NetworkMessage;
 use evnet::physics_layer::{Physics, PhysicsSyncPlugin};
@@ -111,6 +111,7 @@ fn handle_spawn_cube(
             MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
             Transform::from_xyz(0.0, 4.0, 0.0),
             Cube,
+            DespawnOnDisconnect(*peer),
         ));
         if peer == me.get() {
             entity.insert(LocalNet::<Physics>::default());

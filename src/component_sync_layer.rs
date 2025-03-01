@@ -1,4 +1,4 @@
-use crate::Reliability;
+use crate::{Peer, PeerDisconnected, Reliability};
 use crate::message_layer::{AppExt, MessageReceiver, MessageSender, NetworkMessage, SendType};
 use bevy::ecs::component::{ComponentHooks, StorageType};
 use bevy::ecs::world::DeferredWorld;
@@ -7,6 +7,24 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
+
+#[derive(Component)]
+pub struct DespawnOnDisconnect(pub Peer);
+
+pub struct GeneralComponentSyncPlugin;
+impl Plugin for GeneralComponentSyncPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(PreUpdate, |mut commands: Commands, mut event_reader: EventReader<PeerDisconnected>, query: Query<(Entity, &DespawnOnDisconnect)>| {
+            for ev in event_reader.read() {
+                for (e, despawn_on_disconnect) in query.iter() {
+                    if ev.0 == despawn_on_disconnect.0 {
+                        commands.entity(e).despawn_recursive();
+                    }
+                }
+            }
+        });
+    }
+}
 
 pub struct One;
 pub struct Two;

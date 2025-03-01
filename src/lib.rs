@@ -4,12 +4,14 @@ pub mod message_layer;
 pub mod physics_layer;
 
 use bevy::app::{App, Plugin, PluginGroup, PluginGroupBuilder};
-use bevy::prelude::{
-    Commands, Component, IntoSystemConfigs, ResMut, Resource, Update, not, resource_exists,
-};
+use bevy::prelude::{Commands, Component, IntoSystemConfigs, ResMut, Resource, Update, not, resource_exists, Event, EventWriter, Local, PreUpdate};
 use bevy_matchbox::MatchboxSocket;
 use bevy_matchbox::prelude::PeerId;
 use uuid::Uuid;
+
+#[derive(Event)]
+pub struct PeerDisconnected(Peer);
+
 
 pub trait NetworkedCommandExt {
     fn connect(&mut self, room: &str);
@@ -45,6 +47,16 @@ impl Plugin for BaseNetworkingPlugin {
             })
             .run_if(not(resource_exists::<Me>)),
         );
+        app.add_event::<PeerDisconnected>();
+        app.add_systems(PreUpdate, |mut disconnected: Local<Vec<Peer>>, mut event_writer: EventWriter<PeerDisconnected>, socket: ResMut<MatchboxSocket>| {
+            for disconnected_peer in socket.disconnected_peers() {
+                let disconnected_peer: Peer = (*disconnected_peer).into();
+                if !disconnected.contains(&disconnected_peer) {
+                    disconnected.push(disconnected_peer);
+                    event_writer.send(PeerDisconnected(disconnected_peer));
+                }
+            }
+        });
     }
 }
 
@@ -55,6 +67,7 @@ impl PluginGroup for NetworkingPlugins {
         PluginGroupBuilder::start::<Self>()
             .add(BaseNetworkingPlugin)
             .add(message_layer::MessageLayerPlugin)
+            .add(component_sync_layer::GeneralComponentSyncPlugin)
     }
 }
 
