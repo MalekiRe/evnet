@@ -1,9 +1,7 @@
 use crate::message_layer::{AppExt, MessageReceiver, MessageSender, NetworkMessage, SendType};
 use crate::{Me, Peer};
-use bevy::ecs::schedule::ScheduleLabel;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::cmp::PartialEq;
 
 pub trait AppExt2 {
     fn add_networked_event<
@@ -40,7 +38,7 @@ impl AppExt2 for App {
             Update,
             (|mut event_reader: EventReader<NetworkEvent<T>>,
               me: Res<Me>,
-              mut message_sender: MessageSender<T>| {
+              message_sender: MessageSender<T>| {
                 for NetworkEvent(peer, inner) in event_reader.read() {
                     if peer == me.0 {
                         message_sender

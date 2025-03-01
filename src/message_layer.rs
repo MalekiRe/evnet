@@ -8,10 +8,9 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::ecs::world::unsafe_world_cell::UnsafeWorldCell;
 use bevy::prelude::*;
 use bevy_matchbox::MatchboxSocket;
-use bevy_matchbox::matchbox_socket::WebRtcSocket;
-use flume::{Receiver, Sender};
+use flume::Receiver;
 use serde::{Deserialize, Serialize};
-use std::any::{TypeId, type_name};
+use std::any::type_name;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -134,7 +133,7 @@ pub(crate) fn route_messages(world: &mut World) {
         .connected_peers()
         .collect::<Vec<_>>();
     world.resource_scope(|world, networked_messages: Mut<MessageRouter>| {
-        world.resource_scope(|world, mut socket: Mut<MatchboxSocket>| {
+        world.resource_scope(|_world, mut socket: Mut<MatchboxSocket>| {
             for (peer_id, msg) in socket
                 .channel_mut(RELIABLE)
                 .receive()

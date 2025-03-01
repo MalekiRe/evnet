@@ -1,28 +1,12 @@
 use crate::Reliability;
 use crate::message_layer::{AppExt, MessageReceiver, MessageSender, NetworkMessage, SendType};
-use bevy::ecs::component::{
-    ComponentHooks, ComponentId, Components, RequiredComponents, StorageType,
-};
-use bevy::ecs::storage::Storages;
+use bevy::ecs::component::{ComponentHooks, StorageType};
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::any::Any;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-
-fn test(mut app: &mut App) {
-    #[derive(Serialize, Deserialize, Clone, Copy)]
-    pub struct MyName;
-    impl NetworkMessage for MyName {
-        const RELIABILITY: Reliability = Reliability::Reliable;
-    }
-
-    #[derive(Component, Serialize, Deserialize, Clone, Copy)]
-    pub struct Test;
-    app.add_plugins(ComponentSyncPlugin::<(Transform, Test), MyName, _>::default());
-}
 
 pub struct One;
 pub struct Two;
@@ -434,7 +418,7 @@ where
     #[allow(unused_variables)]
     fn register_component_hooks(hooks: &mut bevy::ecs::component::ComponentHooks) {
         hooks.on_add(|mut world: DeferredWorld, targeted_entity, _component_id| {
-            let mut awa = world.entity(targeted_entity);
+            let awa = world.entity(targeted_entity);
             let thing = awa.get::<SyncNet<T>>().unwrap().clone();
             world
                 .get_resource_mut::<EntityMapper<SyncNet<T>>>()

@@ -1,12 +1,11 @@
-use avian3d::math::Vector;
 use avian3d::prelude::*;
 use bevy::asset::AssetContainer;
 use bevy::prelude::*;
-use evnet::component_sync_layer::{EntityMapper, LocalNet, SyncNet};
+use evnet::component_sync_layer::{LocalNet, SyncNet};
 use evnet::event_layer::{AppExt2, NetworkEvent};
 use evnet::message_layer::NetworkMessage;
 use evnet::physics_layer::{Physics, PhysicsSyncPlugin};
-use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, Reliability, component_sync_layer};
+use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, Reliability};
 use serde::{Deserialize, Serialize};
 
 fn main() {

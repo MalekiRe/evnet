@@ -3,18 +3,12 @@ pub mod event_layer;
 pub mod message_layer;
 pub mod physics_layer;
 
-use crate::message_layer::{AppExt, MessageReceiver, NetworkMessage, incoming};
 use bevy::app::{App, Plugin, PluginGroup, PluginGroupBuilder};
-use bevy::ecs::system::SystemParam;
 use bevy::prelude::{
-    Commands, Component, DetectChanges, FromWorld, In, IntoSystem, IntoSystemConfigs, Local, Res,
-    ResMut, Resource, Startup, Update, World, not, resource_exists, resource_removed,
+    Commands, Component, IntoSystemConfigs, ResMut, Resource, Update, not, resource_exists,
 };
 use bevy_matchbox::MatchboxSocket;
 use bevy_matchbox::prelude::PeerId;
-use flume::{Receiver, Sender};
-use serde::{Deserialize, Serialize};
-use std::ops::{Deref, DerefMut};
 use uuid::Uuid;
 
 pub trait NetworkedCommandExt {
