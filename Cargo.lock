@@ -2476,7 +2476,7 @@ dependencies = [
 
 [[package]]
 name = "evnet"
-version = "0.1.0-rc7"
+version = "0.1.0-rc9"
 dependencies = [
  "avian3d",
  "bevy",
