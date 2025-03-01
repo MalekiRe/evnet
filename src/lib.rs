@@ -1,3 +1,4 @@
+pub mod component_sync_layer;
 pub mod event_layer;
 pub mod message_layer;
 pub mod physics_layer;

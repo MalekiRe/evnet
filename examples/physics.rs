@@ -2,26 +2,28 @@ use avian3d::math::Vector;
 use avian3d::prelude::*;
 use bevy::asset::AssetContainer;
 use bevy::prelude::*;
+use evnet::component_sync_layer::{EntityMapper, LocalNet, SyncNet};
 use evnet::event_layer::{AppExt2, NetworkEvent};
 use evnet::message_layer::NetworkMessage;
-use evnet::physics_layer::{EntityMapper, LocalNet, Ownership, PhysicsLayerPlugin, PhysicsSync};
-use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, Reliability};
+use evnet::physics_layer::{Physics, PhysicsSyncPlugin};
+use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, Reliability, component_sync_layer};
 use serde::{Deserialize, Serialize};
 
 fn main() {
-    App::new()
-        // Enable physics
+    App::new() // Enable physics
         .add_plugins((
             DefaultPlugins,
             PhysicsPlugins::default(),
             NetworkingPlugins,
-            PhysicsLayerPlugin,
+            PhysicsSyncPlugin::default(),
         ))
         .add_networked_event::<SpawnCube>()
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (handle_spawn_cube, cube_move, changed, sync_colors).chain().run_if(resource_exists::<Me>),
+            (handle_spawn_cube, cube_move, changed, sync_colors)
+                .chain()
+                .run_if(resource_exists::<Me>),
         )
         .run();
 }
@@ -29,11 +31,11 @@ fn main() {
 fn changed(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
-    remote: Query<Entity, (With<Cube>, Without<LocalNet>)>,
+    remote: Query<Entity, (With<Cube>, Without<LocalNet<Physics>>)>,
 ) {
     if keys.just_pressed(KeyCode::Tab) {
         for e in remote.iter() {
-            commands.entity(e).insert(LocalNet);
+            commands.entity(e).insert(LocalNet::<Physics>::default());
             break;
         }
     }
@@ -41,8 +43,8 @@ fn changed(
 
 fn sync_colors(
     mut materials: ResMut<Assets<StandardMaterial>>,
-    query: Query<&MeshMaterial3d<StandardMaterial>, With<LocalNet>>,
-    query2: Query<&MeshMaterial3d<StandardMaterial>, Without<LocalNet>>,
+    query: Query<&MeshMaterial3d<StandardMaterial>, With<LocalNet<Physics>>>,
+    query2: Query<&MeshMaterial3d<StandardMaterial>, Without<LocalNet<Physics>>>,
 ) {
     for q in query.iter() {
         materials.get_mut(q).unwrap().base_color = Color::BLACK;
@@ -56,7 +58,7 @@ fn cube_move(
     me: Res<Me>,
     keys: Res<ButtonInput<KeyCode>>,
     mut event_writer: EventWriter<NetworkEvent<SpawnCube>>,
-    mut cubes: Query<&mut LinearVelocity, With<LocalNet>>,
+    mut cubes: Query<&mut LinearVelocity, With<LocalNet<Physics>>>,
 ) {
     if keys.just_pressed(KeyCode::Space) {
         event_writer.send(NetworkEvent(me.get(), SpawnCube::new()));
@@ -82,10 +84,10 @@ fn cube_move(
 pub struct Cube;
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
-pub struct SpawnCube(PhysicsSync);
+pub struct SpawnCube(SyncNet<Physics>);
 impl SpawnCube {
     pub fn new() -> Self {
-        Self(PhysicsSync::new())
+        Self(SyncNet::new())
     }
 }
 impl NetworkMessage for SpawnCube {
@@ -112,7 +114,7 @@ fn handle_spawn_cube(
             Cube,
         ));
         if peer == me.get() {
-            entity.insert(LocalNet);
+            entity.insert(LocalNet::<Physics>::default());
         }
     }
 }
