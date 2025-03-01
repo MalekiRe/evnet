@@ -98,8 +98,8 @@ fn handle_spawn_cube(
     mut event_reader: EventReader<NetworkEvent<SpawnCube>>,
     me: Res<Me>,
 ) {
-    for ev in event_reader.read() {
-        let physics_sync = ev.1.0;
+    for NetworkEvent(peer, spawn_cube) in event_reader.read() {
+        let physics_sync = spawn_cube.0;
         // Dynamic physics object with a collision shape and initial angular velocity
         let mut entity = commands.spawn((
             physics_sync,
@@ -111,7 +111,7 @@ fn handle_spawn_cube(
             Transform::from_xyz(0.0, 4.0, 0.0),
             Cube,
         ));
-        if ev.0 == me.get() {
+        if peer == me.get() {
             entity.insert(LocalNet);
         }
     }

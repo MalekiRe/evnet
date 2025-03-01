@@ -68,7 +68,7 @@ impl Component for LocalNet {
     Deserialize,
     Default,
 )]
-pub struct Ownership(u32);
+pub struct Ownership(u64);
 
 #[derive(Resource)]
 pub struct EntityMapper<T: Hash>(pub HashMap<T, Entity>);

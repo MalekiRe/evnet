@@ -39,7 +39,7 @@ impl MessageWrapper {
     }
     pub fn hash<T: Serialize + 'static>() -> u32 {
         let mut hasher = DefaultHasher::new();
-        TypeId::of::<T>().hash(&mut hasher);
+        type_name::<T>().hash(&mut hasher);
         hasher.finish() as u32
     }
 }
@@ -115,7 +115,7 @@ pub struct MessageRouter {
 pub struct MessageLayerPlugin;
 impl Plugin for MessageLayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, route_messages.run_if(resource_exists::<Me>));
+        app.add_systems(Update, route_messages.run_if(resource_exists::<Me>));
     }
 }
 

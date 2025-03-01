@@ -37,7 +37,7 @@ impl AppExt2 for App {
             },
         );
         self.add_systems(
-            PreUpdate,
+            Update,
             (|mut event_reader: EventReader<NetworkEvent<T>>,
               me: Res<Me>,
               mut message_sender: MessageSender<T>| {
