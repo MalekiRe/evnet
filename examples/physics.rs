@@ -5,7 +5,7 @@ use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetEntityMapper
 use evnet::event_layer::{AppExt2, NetworkEvent};
 use evnet::message_layer::NetworkMessage;
 use evnet::physics_layer::{Physics, PhysicsSyncPlugin};
-use evnet::{component_sync_layer, Me, NetworkedCommandExt, NetworkingPlugins, Reliability};
+use evnet::{component_sync_layer, Me, NetworkedCommandExt, NetworkingPlugins, PeerConnected, Reliability};
 use serde::{Deserialize, Serialize};
 
 fn main() {
@@ -21,11 +21,17 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (handle_spawn_cube, cube_move, changed, sync_colors, kill_cube_out_of_bounds, actually_kill_cube)
+            (handle_spawn_cube, cube_move, changed, sync_colors, kill_cube_out_of_bounds, actually_kill_cube, peer_connected)
                 .chain()
                 .run_if(resource_exists::<Me>),
         )
         .run();
+}
+
+pub fn peer_connected(mut event_reader: EventReader<PeerConnected>) {
+    for a in event_reader.read() {
+        println!("Peer connected");
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]

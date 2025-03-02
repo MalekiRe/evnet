@@ -12,6 +12,9 @@ use uuid::Uuid;
 #[derive(Event)]
 pub struct PeerDisconnected(Peer);
 
+#[derive(Event)]
+pub struct PeerConnected(Peer);
+
 
 pub trait NetworkedCommandExt {
     fn connect(&mut self, room: &str);
@@ -48,12 +51,22 @@ impl Plugin for BaseNetworkingPlugin {
             .run_if(not(resource_exists::<Me>)),
         );
         app.add_event::<PeerDisconnected>();
+        app.add_event::<PeerConnected>();
         app.add_systems(PreUpdate, |mut disconnected: Local<Vec<Peer>>, mut event_writer: EventWriter<PeerDisconnected>, socket: ResMut<MatchboxSocket>| {
             for disconnected_peer in socket.disconnected_peers() {
                 let disconnected_peer: Peer = (*disconnected_peer).into();
                 if !disconnected.contains(&disconnected_peer) {
                     disconnected.push(disconnected_peer);
                     event_writer.send(PeerDisconnected(disconnected_peer));
+                }
+            }
+        });
+        app.add_systems(PreUpdate, |mut connected: Local<Vec<Peer>>, mut event_writer: EventWriter<PeerConnected>, socket: ResMut<MatchboxSocket>| {
+            for connected_peer in socket.connected_peers() {
+                let connected_peer: Peer = (connected_peer).into();
+                if !connected.contains(&connected_peer) {
+                    connected.push(connected_peer);
+                    event_writer.send(PeerConnected(connected_peer));
                 }
             }
         });
