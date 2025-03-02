@@ -331,7 +331,7 @@ impl<
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct SyncMsg<Name: 'static, Data: Send + Sync + 'static> {
     sync_net: SyncNet<Name>,
     authority: Authority<Name>,
@@ -400,6 +400,11 @@ impl<T: 'static> PartialEq for SyncNet<T> {
 impl<T: 'static> Eq for SyncNet<T> {}
 #[derive(Component, Serialize, Deserialize)]
 pub struct Authority<T: 'static>(u32, PhantomData<T>);
+impl<T> PartialEq for Authority<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 impl<T: 'static> Clone for Authority<T> {
     fn clone(&self) -> Self {
         Authority(self.0, PhantomData)

@@ -1,23 +1,37 @@
+use std::time::Duration;
 use avian3d::prelude::*;
 use bevy::asset::AssetContainer;
 use bevy::prelude::*;
-use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetEntityMapper, SyncNet};
+use evnet::component_sync_layer::{ComponentSyncPlugin, DespawnOnDisconnect, LocalNet, NetEntityMapper, SyncMsg, SyncNet};
 use evnet::event_layer::{AppExt2, NetworkEvent};
 use evnet::message_layer::NetworkMessage;
 use evnet::physics_layer::{Physics, PhysicsSyncPlugin};
 use evnet::{component_sync_layer, Me, NetworkedCommandExt, NetworkingPlugins, Reliability};
 use serde::{Deserialize, Serialize};
+use evnet::conditioner::{LinkConditioner, LinkConditionerConfig};
 
 fn main() {
     App::new() // Enable physics
+        .insert_resource(LinkConditioner::<SyncMsg<Physics, (Position, Rotation, LinearVelocity, AngularVelocity)>>::new(LinkConditionerConfig {
+            incoming_latency: Duration::from_millis(500),
+            incoming_jitter: Duration::from_millis(200),
+            incoming_loss: 0.1,
+        }))
+        .insert_resource(LinkConditioner::<MyMsg>::new(LinkConditionerConfig {
+            incoming_latency: Duration::from_millis(500),
+            incoming_jitter: Duration::from_millis(200),
+            incoming_loss: 0.90,
+        }))
         .add_plugins((
             DefaultPlugins,
             PhysicsPlugins::default(),
             NetworkingPlugins,
             PhysicsSyncPlugin::default(),
         ))
+        .add_plugins(ComponentSyncPlugin::<Health, HealthSync, _>::default())
         .add_networked_event::<SpawnCube>()
         .add_networked_event::<KillCube>()
+        .add_networked_event::<MyMsg>()
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -25,7 +39,61 @@ fn main() {
                 .chain()
                 .run_if(resource_exists::<Me>),
         )
+        .add_systems(Update,
+                     (read_thing, send_thing).chain().run_if(resource_exists::<Me>))
         .run();
+}
+
+#[derive(Component)]
+struct Health(pub f32);
+
+#[derive(Serialize, Deserialize, Clone)]
+struct HealthSync;
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SpawnPlayer(SyncNet<HealthSync>);
+
+impl NetworkMessage for SpawnPlayer {
+    const RELIABILITY: Reliability = Reliability::Reliable;
+}
+
+fn spawn(mut commands: Commands, mut event_reader: EventReader<NetworkEvent<SpawnPlayer>>, me: Res<Me>) {
+    for NetworkEvent(peer, msg) in event_reader.read() {
+        let mut e = commands.spawn((msg.0, Health(1.0)));
+        if peer == me.get() {
+            e.insert(LocalNet::<HealthSync>::default());
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct MyMsg {
+    v: u32,
+}
+
+impl Default for MyMsg {
+    fn default() -> Self {
+        Self {
+            v: 0,
+        }
+    }
+}
+impl NetworkMessage for MyMsg {
+    const RELIABILITY: Reliability = Reliability::Reliable;
+}
+
+fn send_thing(me: Res<Me>, mut ev: EventWriter<NetworkEvent<MyMsg>>, mut local: Local<MyMsg>) {
+    local.v += 1;
+    ev.send(NetworkEvent(me.get(), local.clone()));
+}
+
+fn read_thing(mut ev: EventReader<NetworkEvent<MyMsg>>, me: Res<Me>) {
+    for NetworkEvent(peer, msg) in ev.read() {
+        if peer == me.get() {
+            continue;
+        }
+        println!("{:?}, {:?}", msg, peer);
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
