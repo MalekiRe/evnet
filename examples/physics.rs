@@ -112,6 +112,7 @@ fn handle_spawn_cube(
             Transform::from_xyz(0.0, 4.0, 0.0),
             Cube,
             DespawnOnDisconnect(*peer),
+            TransformInterpolation,
         ));
         if peer == me.get() {
             entity.insert(LocalNet::<Physics>::default());
