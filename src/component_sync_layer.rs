@@ -45,11 +45,11 @@ impl<
 > Plugin for ComponentSyncPlugin<C, Name, One>
 {
     fn build(&self, app: &mut App) {
-        app.init_resource::<EntityMapper<SyncNet<Name>>>();
+        app.init_resource::<NetEntityMapper<SyncNet<Name>>>();
         app.add_network_message(
             |rx: MessageReceiver<SyncMsg<Name, C>>,
              mut commands: Commands,
-             entity_mapper: Res<EntityMapper<SyncNet<Name>>>,
+             entity_mapper: Res<NetEntityMapper<SyncNet<Name>>>,
              mut query: Query<(&mut SyncNet<Name>, &mut Authority<Name>, &mut C)>| {
                 for (
                     SyncMsg {
@@ -109,11 +109,11 @@ impl<
 > Plugin for ComponentSyncPlugin<(C0, C1), Name, Two>
 {
     fn build(&self, app: &mut App) {
-        app.init_resource::<EntityMapper<SyncNet<Name>>>();
+        app.init_resource::<NetEntityMapper<SyncNet<Name>>>();
         app.add_network_message(
             |rx: MessageReceiver<SyncMsg<Name, (C0, C1)>>,
              mut commands: Commands,
-             entity_mapper: Res<EntityMapper<SyncNet<Name>>>,
+             entity_mapper: Res<NetEntityMapper<SyncNet<Name>>>,
              mut query: Query<(&mut SyncNet<Name>, &mut Authority<Name>, &mut C0, &mut C1)>| {
                 for (
                     SyncMsg {
@@ -175,11 +175,11 @@ impl<
 > Plugin for ComponentSyncPlugin<(C0, C1, C2), Name, Three>
 {
     fn build(&self, app: &mut App) {
-        app.init_resource::<EntityMapper<SyncNet<Name>>>();
+        app.init_resource::<NetEntityMapper<SyncNet<Name>>>();
         app.add_network_message(
             |rx: MessageReceiver<SyncMsg<Name, (C0, C1, C2)>>,
              mut commands: Commands,
-             entity_mapper: Res<EntityMapper<SyncNet<Name>>>,
+             entity_mapper: Res<NetEntityMapper<SyncNet<Name>>>,
              mut query: Query<(
                 &mut SyncNet<Name>,
                 &mut Authority<Name>,
@@ -256,11 +256,11 @@ impl<
 > Plugin for ComponentSyncPlugin<(C0, C1, C2, C3), Name, Four>
 {
     fn build(&self, app: &mut App) {
-        app.init_resource::<EntityMapper<SyncNet<Name>>>();
+        app.init_resource::<NetEntityMapper<SyncNet<Name>>>();
         app.add_network_message(
             |rx: MessageReceiver<SyncMsg<Name, (C0, C1, C2, C3)>>,
              mut commands: Commands,
-             entity_mapper: Res<EntityMapper<SyncNet<Name>>>,
+             entity_mapper: Res<NetEntityMapper<SyncNet<Name>>>,
              mut query: Query<(
                 &mut SyncNet<Name>,
                 &mut Authority<Name>,
@@ -358,8 +358,8 @@ unsafe impl<
 {
 }
 #[derive(Deref, DerefMut, Resource)]
-pub struct EntityMapper<T: Hash>(pub HashMap<T, Entity>);
-impl<T: Hash> Default for EntityMapper<T> {
+pub struct NetEntityMapper<T: Hash>(pub HashMap<T, Entity>);
+impl<T: Hash> Default for NetEntityMapper<T> {
     fn default() -> Self {
         Self(HashMap::new())
     }
@@ -439,7 +439,7 @@ where
             let awa = world.entity(targeted_entity);
             let thing = awa.get::<SyncNet<T>>().unwrap().clone();
             world
-                .get_resource_mut::<EntityMapper<SyncNet<T>>>()
+                .get_resource_mut::<NetEntityMapper<SyncNet<T>>>()
                 .unwrap()
                 .0
                 .insert(thing, targeted_entity);

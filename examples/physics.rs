@@ -1,11 +1,11 @@
 use avian3d::prelude::*;
 use bevy::asset::AssetContainer;
 use bevy::prelude::*;
-use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, SyncNet};
+use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetEntityMapper, SyncNet};
 use evnet::event_layer::{AppExt2, NetworkEvent};
 use evnet::message_layer::NetworkMessage;
 use evnet::physics_layer::{Physics, PhysicsSyncPlugin};
-use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, Reliability};
+use evnet::{component_sync_layer, Me, NetworkedCommandExt, NetworkingPlugins, Reliability};
 use serde::{Deserialize, Serialize};
 
 fn main() {
@@ -17,22 +17,37 @@ fn main() {
             PhysicsSyncPlugin::default(),
         ))
         .add_networked_event::<SpawnCube>()
+        .add_networked_event::<KillCube>()
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (handle_spawn_cube, cube_move, changed, sync_colors, kill_cube_out_of_bounds)
+            (handle_spawn_cube, cube_move, changed, sync_colors, kill_cube_out_of_bounds, actually_kill_cube)
                 .chain()
                 .run_if(resource_exists::<Me>),
         )
         .run();
 }
 
-fn kill_cube_out_of_bounds(mut commands: Commands, cubes: Query<(Entity, &Transform), With<Cube>>) {
-    cubes.iter().for_each(|(e, t)| {
+#[derive(Serialize, Deserialize, Clone)]
+struct KillCube(pub SyncNet<Physics>);
+
+impl NetworkMessage for KillCube {
+    const RELIABILITY: Reliability = Reliability::Reliable;
+}
+
+fn kill_cube_out_of_bounds(me: Res<Me>, mut event_writer: EventWriter<NetworkEvent<KillCube>>, cubes: Query<(&SyncNet<Physics>, &Transform), (With<Cube>, With<LocalNet<Physics>>)>) {
+    cubes.iter().for_each(|(sync_net, t)| {
        if t.translation.y <= -1000.0 {
-           commands.entity(e).despawn_recursive();
+           event_writer.send(NetworkEvent(me.get(), KillCube(*sync_net)));
        }
     });
+}
+
+fn actually_kill_cube(mut event_reader: EventReader<NetworkEvent<KillCube>>, cubes: Query<Entity>, mut commands: Commands, entity_mapper: Res<NetEntityMapper<SyncNet<Physics>>>) {
+    for NetworkEvent(_peer, msg) in event_reader.read() {
+        let Some(e) = entity_mapper.get(&msg.0) else { continue };
+        commands.entity(*e).despawn_recursive();
+    }
 }
 
 fn changed(
@@ -113,9 +128,9 @@ fn handle_spawn_cube(
         let mut entity = commands.spawn((
             physics_sync,
             RigidBody::Dynamic,
-            Collider::cuboid(1.0, 1.0, 1.0),
+            Collider::cuboid(0.1, 0.1, 0.1),
             AngularVelocity(Vec3::new(2.5, 3.5, 1.5)),
-            Mesh3d(meshes.add(Cuboid::from_length(1.0))),
+            Mesh3d(meshes.add(Cuboid::from_length(0.1))),
             MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
             Transform::from_xyz(0.0, 4.0, 0.0),
             Cube,
