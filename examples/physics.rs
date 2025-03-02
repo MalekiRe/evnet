@@ -62,7 +62,7 @@ fn cube_move(
     if keys.just_pressed(KeyCode::Space) {
         event_writer.send(NetworkEvent(me.get(), SpawnCube::new()));
     }
-    const AMOUNT: f32 = 1.0;
+    const AMOUNT: f32 = 0.2;
     for mut cube in cubes.iter_mut() {
         if keys.pressed(KeyCode::KeyA) {
             cube.x -= AMOUNT;
@@ -129,8 +129,8 @@ fn setup(
     // Static physics object with a collision shape
     commands.spawn((
         RigidBody::Static,
-        Collider::cylinder(4.0, 0.1),
-        Mesh3d(meshes.add(Cylinder::new(4.0, 0.1))),
+        Collider::cylinder(6.0, 0.1),
+        Mesh3d(meshes.add(Cylinder::new(6.0, 0.1))),
         MeshMaterial3d(materials.add(Color::WHITE)),
     ));
 
