@@ -37,7 +37,7 @@ impl NetworkMessage for KillCube {
 
 fn kill_cube_out_of_bounds(me: Res<Me>, mut event_writer: EventWriter<NetworkEvent<KillCube>>, cubes: Query<(&SyncNet<Physics>, &Transform), (With<Cube>, With<LocalNet<Physics>>)>) {
     cubes.iter().for_each(|(sync_net, t)| {
-       if t.translation.y <= -1000.0 {
+       if t.translation.y <= -100.0 {
            event_writer.send(NetworkEvent(me.get(), KillCube(*sync_net)));
        }
     });
@@ -47,7 +47,7 @@ fn actually_kill_cube(mut event_reader: EventReader<NetworkEvent<KillCube>>, cub
     for NetworkEvent(_peer, msg) in event_reader.read() {
         let Some(e) = entity_mapper.get(&msg.0) else { continue };
         commands.entity(*e).despawn_recursive();
-        println!("I actually killed");
+        //println!("I actually killed");
     }
 }
 
