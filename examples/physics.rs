@@ -47,6 +47,7 @@ fn actually_kill_cube(mut event_reader: EventReader<NetworkEvent<KillCube>>, cub
     for NetworkEvent(_peer, msg) in event_reader.read() {
         let Some(e) = entity_mapper.get(&msg.0) else { continue };
         commands.entity(*e).despawn_recursive();
+        println!("I actually killed");
     }
 }
 
@@ -83,7 +84,9 @@ fn cube_move(
     mut cubes: Query<&mut LinearVelocity, With<LocalNet<Physics>>>,
 ) {
     if keys.just_pressed(KeyCode::Space) {
-        event_writer.send(NetworkEvent(me.get(), SpawnCube::new()));
+        for _ in 0..20 {
+            event_writer.send(NetworkEvent(me.get(), SpawnCube::new()));
+        }
     }
     const AMOUNT: f32 = 0.2;
     for mut cube in cubes.iter_mut() {
