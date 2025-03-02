@@ -29,7 +29,7 @@ fn main() {
 
 fn kill_cube_out_of_bounds(mut commands: Commands, cubes: Query<(Entity, &Transform), With<Cube>>) {
     cubes.iter().for_each(|(e, t)| {
-       if t.translation.y <= 1000.0 {
+       if t.translation.y <= -1000.0 {
            commands.entity(e).despawn_recursive();
        }
     });
