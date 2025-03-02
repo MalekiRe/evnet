@@ -20,11 +20,19 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (handle_spawn_cube, cube_move, changed, sync_colors)
+            (handle_spawn_cube, cube_move, changed, sync_colors, kill_cube_out_of_bounds)
                 .chain()
                 .run_if(resource_exists::<Me>),
         )
         .run();
+}
+
+fn kill_cube_out_of_bounds(mut commands: Commands, cubes: Query<(Entity, &Transform), With<Cube>>) {
+    cubes.iter().for_each(|(e, t)| {
+       if t.translation.y <= 1000.0 {
+           commands.entity(e).despawn_recursive();
+       }
+    });
 }
 
 fn changed(
