@@ -1,13 +1,12 @@
 use avian3d::prelude::*;
-use bevy::asset::AssetContainer;
 use bevy::prelude::*;
 use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetworkEntityMapper, NetworkId};
 use evnet::event_layer::{AppExt2, NetworkEventReader, NetworkEventWriter};
 use evnet::message_layer::NetworkMessage;
-use evnet::physics_layer::{Physics, PhysicsSyncPlugin};
+use evnet::physics_layer::{PhysicsSyncPlugin};
 use evnet::{
-    Me, NetworkedCommandExt, NetworkingPlugins, Peer, PeerConnected, Reliability,
-    component_sync_layer, connected,
+    Me, NetworkedCommandExt, NetworkingPlugins, PeerConnected, Reliability,
+    connected,
 };
 use serde::{Deserialize, Serialize};
 
@@ -40,7 +39,7 @@ fn main() {
 }
 
 pub fn peer_connected(mut event_reader: EventReader<PeerConnected>) {
-    for a in event_reader.read() {
+    for _ in event_reader.read() {
         println!("Peer connected");
     }
 }
@@ -53,7 +52,6 @@ impl NetworkMessage for KillCube {
 }
 
 fn kill_cube_out_of_bounds(
-    me: Me,
     mut event_writer: NetworkEventWriter<KillCube>,
     cubes: Query<(&NetworkId, &Transform), (With<Cube>, With<LocalNet>)>,
 ) {
@@ -66,7 +64,6 @@ fn kill_cube_out_of_bounds(
 
 fn actually_kill_cube(
     mut event_reader: NetworkEventReader<KillCube>,
-    cubes: Query<Entity>,
     mut commands: Commands,
     entity_mapper: Res<NetworkEntityMapper>,
 ) {

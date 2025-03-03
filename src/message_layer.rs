@@ -1,5 +1,5 @@
 use crate::message_layer::outgoing::SenderRes;
-use crate::{Me, MeRes, Peer, RELIABLE, Reliability, UNRELIABLE, UNRELIABLE_ORDERED, connected};
+use crate::{MeRes, Peer, RELIABLE, Reliability, UNRELIABLE, UNRELIABLE_ORDERED, connected};
 use bevy::ecs::archetype::ArchetypeComponentId;
 use bevy::ecs::component::{ComponentId, Tick};
 use bevy::ecs::query::Access;

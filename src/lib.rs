@@ -7,7 +7,7 @@ use bevy::app::{App, Plugin, PluginGroup, PluginGroupBuilder};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::{
     Commands, Component, Event, EventWriter, IntoSystemConfigs, Local, PreUpdate, Res, ResMut,
-    Resource, Update, not, resource_exists,
+    Resource, Update, not,
 };
 use bevy_matchbox::MatchboxSocket;
 use bevy_matchbox::prelude::PeerId;

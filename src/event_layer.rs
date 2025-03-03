@@ -1,5 +1,5 @@
 use crate::message_layer::{AppExt, MessageReceiver, MessageSender, NetworkMessage, SendType};
-use crate::{Me, Peer, connected};
+use crate::{Peer};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,6 @@ pub struct NetworkEventWriter<
     E: Send + Sync + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
 > {
     message_sender: MessageSender<'w, E>,
-    me: Me<'w>,
 }
 impl<E: Send + Sync + Clone + Serialize + for<'de> Deserialize<'de> + 'static>
     NetworkEventWriter<'_, E>
