@@ -1,5 +1,6 @@
 use crate::message_layer::{AppExt, MessageReceiver, MessageSender, NetworkMessage, SendType};
 use crate::{Me, Peer, connected};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -10,11 +11,48 @@ pub trait AppExt2 {
         &mut self,
     ) -> &mut Self;
 }
+
+#[derive(SystemParam)]
+pub struct NetworkEventReader<
+    'w,
+    's,
+    E: Send + Sync + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+> {
+    event_reader: EventReader<'w, 's, NetworkEvent<E>>,
+}
+
+impl<E: Send + Sync + Clone + Serialize + for<'de> Deserialize<'de> + 'static>
+    NetworkEventReader<'_, '_, E>
+{
+    pub fn read(&mut self) -> impl Iterator<Item = (&Peer, &E)> + '_ {
+        self.event_reader
+            .read()
+            .map(|NetworkEvent(peer, event)| (peer, event))
+    }
+}
+
+#[derive(SystemParam)]
+pub struct NetworkEventWriter<
+    'w,
+    E: Send + Sync + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+> {
+    message_sender: MessageSender<'w, E>,
+    me: Me<'w>,
+}
+impl<E: Send + Sync + Clone + Serialize + for<'de> Deserialize<'de> + 'static>
+    NetworkEventWriter<'_, E>
+{
+    pub fn send(&mut self, e: E) {
+        self.send_to(e, SendType::All);
+    }
+    pub fn send_to(&mut self, e: E, send_type: SendType) {
+        self.message_sender.send((e, send_type)).unwrap();
+    }
+}
+
 #[derive(Event)]
-pub struct NetworkEvent<T: Clone + Serialize + for<'de> Deserialize<'de> + 'static>(
-    pub Peer,
-    pub T,
-);
+struct NetworkEvent<E: Clone + Serialize + for<'de> Deserialize<'de> + 'static>(Peer, E);
+
 impl<T: Clone + Serialize + for<'de> Deserialize<'de> + 'static> NetworkEvent<T> {
     pub fn new(peer: Peer, inner: T) -> Self {
         Self(peer, inner)
@@ -33,22 +71,6 @@ impl AppExt2 for App {
                     event_writer.send(NetworkEvent::new(peer, e));
                 }
             },
-        );
-        self.add_systems(
-            Update,
-            (|mut event_reader: EventReader<NetworkEvent<T>>,
-              me: Me,
-              message_sender: MessageSender<T>| {
-                for NetworkEvent(peer, inner) in event_reader.read() {
-                    if me == peer {
-                        message_sender
-                            .send((inner.clone(), SendType::AllButSelf))
-                            .unwrap();
-                    }
-                }
-            })
-            .run_if(connected)
-            .after(crate::message_layer::route_messages),
         );
         self.add_event::<NetworkEvent<T>>();
         self

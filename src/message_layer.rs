@@ -43,6 +43,7 @@ impl MessageWrapper {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum SendType {
     All,
     AllButSelf,

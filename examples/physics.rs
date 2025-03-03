@@ -2,7 +2,7 @@ use avian3d::prelude::*;
 use bevy::asset::AssetContainer;
 use bevy::prelude::*;
 use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetworkEntityMapper, NetworkId};
-use evnet::event_layer::{AppExt2, NetworkEvent};
+use evnet::event_layer::{AppExt2, NetworkEventReader, NetworkEventWriter};
 use evnet::message_layer::NetworkMessage;
 use evnet::physics_layer::{Physics, PhysicsSyncPlugin};
 use evnet::{
@@ -54,27 +54,30 @@ impl NetworkMessage for KillCube {
 
 fn kill_cube_out_of_bounds(
     me: Me,
-    mut event_writer: EventWriter<NetworkEvent<KillCube>>,
+    mut event_writer: NetworkEventWriter<KillCube>,
     cubes: Query<(&NetworkId, &Transform), (With<Cube>, With<LocalNet>)>,
 ) {
     cubes.iter().for_each(|(sync_net, t)| {
         if t.translation.y <= -100.0 {
-            event_writer.send(NetworkEvent(*me, KillCube(*sync_net)));
+            event_writer.send(KillCube(*sync_net));
         }
     });
 }
 
 fn actually_kill_cube(
-    mut event_reader: EventReader<NetworkEvent<KillCube>>,
+    mut event_reader: NetworkEventReader<KillCube>,
     cubes: Query<Entity>,
     mut commands: Commands,
     entity_mapper: Res<NetworkEntityMapper>,
 ) {
-    for NetworkEvent(_peer, msg) in event_reader.read() {
+    for (_peer, msg) in event_reader.read() {
         let Some(e) = entity_mapper.get(&msg.0) else {
             continue;
         };
-        commands.entity(*e).despawn_recursive();
+        let Some(e) = commands.get_entity(*e) else {
+            continue;
+        };
+        e.despawn_recursive();
         //println!("I actually killed");
     }
 }
@@ -108,13 +111,11 @@ fn sync_colors(
 fn cube_move(
     me: Me,
     keys: Res<ButtonInput<KeyCode>>,
-    mut event_writer: EventWriter<NetworkEvent<SpawnCube>>,
+    mut event_writer: NetworkEventWriter<SpawnCube>,
     mut cubes: Query<&mut LinearVelocity, With<LocalNet>>,
 ) {
     if keys.just_pressed(KeyCode::Space) {
-        for _ in 0..20 {
-            event_writer.send(NetworkEvent(me.get(), SpawnCube::new(&me)));
-        }
+        event_writer.send(SpawnCube::new(&me));
     }
     const AMOUNT: f32 = 0.2;
     for mut cube in cubes.iter_mut() {
@@ -150,10 +151,10 @@ fn handle_spawn_cube(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut event_reader: EventReader<NetworkEvent<SpawnCube>>,
+    mut event_reader: NetworkEventReader<SpawnCube>,
     me: Me,
 ) {
-    for NetworkEvent(peer, spawn_cube) in event_reader.read() {
+    for (peer, spawn_cube) in event_reader.read() {
         let physics_sync = spawn_cube.0;
         // Dynamic physics object with a collision shape and initial angular velocity
         let mut entity = commands.spawn((
