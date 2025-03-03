@@ -1,11 +1,14 @@
 use avian3d::prelude::*;
 use bevy::asset::AssetContainer;
 use bevy::prelude::*;
-use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetEntityMapper, SyncNet};
+use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetworkEntityMapper, NetworkId};
 use evnet::event_layer::{AppExt2, NetworkEvent};
 use evnet::message_layer::NetworkMessage;
 use evnet::physics_layer::{Physics, PhysicsSyncPlugin};
-use evnet::{component_sync_layer, Me, NetworkedCommandExt, NetworkingPlugins, PeerConnected, Reliability};
+use evnet::{
+    Me, NetworkedCommandExt, NetworkingPlugins, Peer, PeerConnected, Reliability,
+    component_sync_layer, connected,
+};
 use serde::{Deserialize, Serialize};
 
 fn main() {
@@ -21,9 +24,17 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (handle_spawn_cube, cube_move, changed, sync_colors, kill_cube_out_of_bounds, actually_kill_cube, peer_connected)
+            (
+                handle_spawn_cube,
+                cube_move,
+                changed,
+                sync_colors,
+                kill_cube_out_of_bounds,
+                actually_kill_cube,
+                peer_connected,
+            )
                 .chain()
-                .run_if(resource_exists::<Me>),
+                .run_if(connected),
         )
         .run();
 }
@@ -35,23 +46,34 @@ pub fn peer_connected(mut event_reader: EventReader<PeerConnected>) {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct KillCube(pub SyncNet<Physics>);
+struct KillCube(pub NetworkId);
 
 impl NetworkMessage for KillCube {
     const RELIABILITY: Reliability = Reliability::Reliable;
 }
 
-fn kill_cube_out_of_bounds(me: Res<Me>, mut event_writer: EventWriter<NetworkEvent<KillCube>>, cubes: Query<(&SyncNet<Physics>, &Transform), (With<Cube>, With<LocalNet<Physics>>)>) {
+fn kill_cube_out_of_bounds(
+    me: Me,
+    mut event_writer: EventWriter<NetworkEvent<KillCube>>,
+    cubes: Query<(&NetworkId, &Transform), (With<Cube>, With<LocalNet>)>,
+) {
     cubes.iter().for_each(|(sync_net, t)| {
-       if t.translation.y <= -100.0 {
-           event_writer.send(NetworkEvent(me.get(), KillCube(*sync_net)));
-       }
+        if t.translation.y <= -100.0 {
+            event_writer.send(NetworkEvent(*me, KillCube(*sync_net)));
+        }
     });
 }
 
-fn actually_kill_cube(mut event_reader: EventReader<NetworkEvent<KillCube>>, cubes: Query<Entity>, mut commands: Commands, entity_mapper: Res<NetEntityMapper<SyncNet<Physics>>>) {
+fn actually_kill_cube(
+    mut event_reader: EventReader<NetworkEvent<KillCube>>,
+    cubes: Query<Entity>,
+    mut commands: Commands,
+    entity_mapper: Res<NetworkEntityMapper>,
+) {
     for NetworkEvent(_peer, msg) in event_reader.read() {
-        let Some(e) = entity_mapper.get(&msg.0) else { continue };
+        let Some(e) = entity_mapper.get(&msg.0) else {
+            continue;
+        };
         commands.entity(*e).despawn_recursive();
         //println!("I actually killed");
     }
@@ -60,11 +82,11 @@ fn actually_kill_cube(mut event_reader: EventReader<NetworkEvent<KillCube>>, cub
 fn changed(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
-    remote: Query<Entity, (With<Cube>, Without<LocalNet<Physics>>)>,
+    remote: Query<Entity, (With<Cube>, Without<LocalNet>)>,
 ) {
     if keys.just_pressed(KeyCode::Tab) {
         for e in remote.iter() {
-            commands.entity(e).insert(LocalNet::<Physics>::default());
+            commands.entity(e).insert(LocalNet);
             break;
         }
     }
@@ -72,8 +94,8 @@ fn changed(
 
 fn sync_colors(
     mut materials: ResMut<Assets<StandardMaterial>>,
-    query: Query<&MeshMaterial3d<StandardMaterial>, With<LocalNet<Physics>>>,
-    query2: Query<&MeshMaterial3d<StandardMaterial>, Without<LocalNet<Physics>>>,
+    query: Query<&MeshMaterial3d<StandardMaterial>, With<LocalNet>>,
+    query2: Query<&MeshMaterial3d<StandardMaterial>, Without<LocalNet>>,
 ) {
     for q in query.iter() {
         materials.get_mut(q).unwrap().base_color = Color::BLACK;
@@ -84,14 +106,14 @@ fn sync_colors(
 }
 
 fn cube_move(
-    me: Res<Me>,
+    me: Me,
     keys: Res<ButtonInput<KeyCode>>,
     mut event_writer: EventWriter<NetworkEvent<SpawnCube>>,
-    mut cubes: Query<&mut LinearVelocity, With<LocalNet<Physics>>>,
+    mut cubes: Query<&mut LinearVelocity, With<LocalNet>>,
 ) {
     if keys.just_pressed(KeyCode::Space) {
         for _ in 0..20 {
-            event_writer.send(NetworkEvent(me.get(), SpawnCube::new()));
+            event_writer.send(NetworkEvent(me.get(), SpawnCube::new(&me)));
         }
     }
     const AMOUNT: f32 = 0.2;
@@ -115,10 +137,10 @@ fn cube_move(
 pub struct Cube;
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
-pub struct SpawnCube(SyncNet<Physics>);
+pub struct SpawnCube(NetworkId);
 impl SpawnCube {
-    pub fn new() -> Self {
-        Self(SyncNet::new())
+    pub fn new(me: &Me) -> Self {
+        Self(NetworkId::new(me))
     }
 }
 impl NetworkMessage for SpawnCube {
@@ -129,7 +151,7 @@ fn handle_spawn_cube(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut event_reader: EventReader<NetworkEvent<SpawnCube>>,
-    me: Res<Me>,
+    me: Me,
 ) {
     for NetworkEvent(peer, spawn_cube) in event_reader.read() {
         let physics_sync = spawn_cube.0;
@@ -147,7 +169,7 @@ fn handle_spawn_cube(
             TransformInterpolation,
         ));
         if peer == me.get() {
-            entity.insert(LocalNet::<Physics>::default());
+            entity.insert(LocalNet);
         }
     }
 }

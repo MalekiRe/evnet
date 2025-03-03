@@ -1,5 +1,5 @@
 use crate::message_layer::outgoing::SenderRes;
-use crate::{Me, Peer, RELIABLE, Reliability, UNRELIABLE, UNRELIABLE_ORDERED};
+use crate::{Me, MeRes, Peer, RELIABLE, Reliability, UNRELIABLE, UNRELIABLE_ORDERED, connected};
 use bevy::ecs::archetype::ArchetypeComponentId;
 use bevy::ecs::component::{ComponentId, Tick};
 use bevy::ecs::query::Access;
@@ -107,19 +107,21 @@ impl<'w, Message: Send + Sync + 'static> DerefMut for MessageSender<'w, Message>
 pub struct MessageRouter {
     pub route_incoming_messages: HashMap<u32, Box<dyn Fn(&[u8], Peer) + Send + Sync + 'static>>,
     pub route_outgoing_messages: Vec<
-        Box<dyn Fn(&mut MatchboxSocket, Me, &[matchbox_socket::PeerId]) + Send + Sync + 'static>,
+        Box<
+            dyn Fn(&mut MatchboxSocket, &MeRes, &[matchbox_socket::PeerId]) + Send + Sync + 'static,
+        >,
     >,
 }
 
 pub struct MessageLayerPlugin;
 impl Plugin for MessageLayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, route_messages.run_if(resource_exists::<Me>));
+        app.add_systems(Update, route_messages.run_if(connected));
     }
 }
 
 pub(crate) fn route_messages(world: &mut World) {
-    let Some(me) = world.get_resource::<Me>() else {
+    let Some(me) = world.get_resource::<MeRes>() else {
         return;
     };
     let me = *me;
@@ -154,7 +156,7 @@ pub(crate) fn route_messages(world: &mut World) {
                 route_incoming_messages(&msg.content, peer_id.into());
             }
             for route_outgoing_messages in &networked_messages.route_outgoing_messages {
-                route_outgoing_messages(&mut socket, me, &peers);
+                route_outgoing_messages(&mut socket, &me, &peers);
             }
         });
     });
@@ -195,7 +197,9 @@ impl AppExt for App {
             .resource_mut::<MessageRouter>()
             .route_outgoing_messages
             .push(Box::new(
-                move |socket: &mut MatchboxSocket, me: Me, peers: &[matchbox_socket::PeerId]| {
+                move |socket: &mut MatchboxSocket,
+                      me: &MeRes,
+                      peers: &[matchbox_socket::PeerId]| {
                     for (message, sender) in outgoing_rx.try_iter() {
                         let channel = socket.channel_mut(Message::RELIABILITY as usize);
                         let msg_bytes = MessageWrapper::serialize(&message);

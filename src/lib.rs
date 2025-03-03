@@ -4,17 +4,31 @@ pub mod message_layer;
 pub mod physics_layer;
 
 use bevy::app::{App, Plugin, PluginGroup, PluginGroupBuilder};
-use bevy::prelude::{Commands, Component, IntoSystemConfigs, ResMut, Resource, Update, not, resource_exists, Event, EventWriter, Local, PreUpdate};
+use bevy::ecs::system::SystemParam;
+use bevy::prelude::{
+    Commands, Component, Event, EventWriter, IntoSystemConfigs, Local, PreUpdate, Res, ResMut,
+    Resource, Update, not, resource_exists,
+};
 use bevy_matchbox::MatchboxSocket;
 use bevy_matchbox::prelude::PeerId;
+use serde::{Deserialize, Serialize};
+use std::ops::Deref;
 use uuid::Uuid;
 
 #[derive(Event)]
 pub struct PeerDisconnected(Peer);
-
+impl PeerDisconnected {
+    pub fn get(&self) -> Peer {
+        self.0
+    }
+}
 #[derive(Event)]
 pub struct PeerConnected(Peer);
-
+impl PeerConnected {
+    pub fn get(&self) -> Peer {
+        self.0
+    }
+}
 
 pub trait NetworkedCommandExt {
     fn connect(&mut self, room: &str);
@@ -38,6 +52,10 @@ impl NetworkedCommandExt for Commands<'_, '_> {
     }
 }
 
+pub fn connected(me: Option<Res<MeRes>>) -> bool {
+    me.is_some()
+}
+
 pub struct BaseNetworkingPlugin;
 
 impl Plugin for BaseNetworkingPlugin {
@@ -46,30 +64,40 @@ impl Plugin for BaseNetworkingPlugin {
             Update,
             (|mut commands: Commands, mut socket: ResMut<MatchboxSocket>| {
                 let Some(id) = socket.id() else { return };
-                commands.insert_resource(Me(id.into()));
+                commands.insert_resource(MeRes(id.into()));
             })
-            .run_if(not(resource_exists::<Me>)),
+            .run_if(not(connected)),
         );
         app.add_event::<PeerDisconnected>();
         app.add_event::<PeerConnected>();
-        app.add_systems(PreUpdate, |mut disconnected: Local<Vec<Peer>>, mut event_writer: EventWriter<PeerDisconnected>, socket: ResMut<MatchboxSocket>| {
-            for disconnected_peer in socket.disconnected_peers() {
-                let disconnected_peer: Peer = (*disconnected_peer).into();
-                if !disconnected.contains(&disconnected_peer) {
-                    disconnected.push(disconnected_peer);
-                    event_writer.send(PeerDisconnected(disconnected_peer));
+        app.add_systems(
+            PreUpdate,
+            |mut disconnected: Local<Vec<Peer>>,
+             mut event_writer: EventWriter<PeerDisconnected>,
+             socket: ResMut<MatchboxSocket>| {
+                for disconnected_peer in socket.disconnected_peers() {
+                    let disconnected_peer: Peer = (*disconnected_peer).into();
+                    if !disconnected.contains(&disconnected_peer) {
+                        disconnected.push(disconnected_peer);
+                        event_writer.send(PeerDisconnected(disconnected_peer));
+                    }
                 }
-            }
-        });
-        app.add_systems(PreUpdate, |mut connected: Local<Vec<Peer>>, mut event_writer: EventWriter<PeerConnected>, socket: ResMut<MatchboxSocket>| {
-            for connected_peer in socket.connected_peers() {
-                let connected_peer: Peer = (connected_peer).into();
-                if !connected.contains(&connected_peer) {
-                    connected.push(connected_peer);
-                    event_writer.send(PeerConnected(connected_peer));
+            },
+        );
+        app.add_systems(
+            PreUpdate,
+            |mut connected: Local<Vec<Peer>>,
+             mut event_writer: EventWriter<PeerConnected>,
+             socket: ResMut<MatchboxSocket>| {
+                for connected_peer in socket.connected_peers() {
+                    let connected_peer: Peer = (connected_peer).into();
+                    if !connected.contains(&connected_peer) {
+                        connected.push(connected_peer);
+                        event_writer.send(PeerConnected(connected_peer));
+                    }
                 }
-            }
-        });
+            },
+        );
     }
 }
 
@@ -84,7 +112,9 @@ impl PluginGroup for NetworkingPlugins {
     }
 }
 
-#[derive(Component, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[derive(
+    Component, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize,
+)]
 pub struct Peer(u128);
 
 impl From<Peer> for matchbox_socket::PeerId {
@@ -99,23 +129,40 @@ impl From<matchbox_socket::PeerId> for Peer {
 }
 
 #[derive(Resource, Component, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub struct Me(Peer);
+pub struct MeRes(Peer);
 
-impl Me {
-    pub fn get(&self) -> Peer {
-        self.0
-    }
+#[derive(SystemParam)]
+pub struct Me<'w> {
+    me_res: Res<'w, MeRes>,
 }
-
-impl PartialEq<Peer> for Me {
+impl PartialEq<Peer> for Me<'_> {
     fn eq(&self, other: &Peer) -> bool {
-        self.0.eq(other)
+        self.0 == other.0
+    }
+}
+impl PartialEq<&Peer> for Me<'_> {
+    fn eq(&self, other: &&Peer) -> bool {
+        self.0 == other.0
     }
 }
 
-impl PartialEq<Me> for Peer {
+impl Deref for Me<'_> {
+    type Target = Peer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.me_res.0
+    }
+}
+
+impl Me<'_> {
+    pub fn get(&self) -> Peer {
+        Peer(self.0)
+    }
+}
+
+impl PartialEq<Me<'_>> for Peer {
     fn eq(&self, other: &Me) -> bool {
-        self.eq(&other.0)
+        self.0 == other.0
     }
 }
 
@@ -137,7 +184,7 @@ pub enum Reliability {
 }
 
 impl Reliability {
-    pub fn try_new(val: usize) -> Option<Self> {
+    pub const fn try_new(val: usize) -> Option<Self> {
         match val {
             RELIABLE => Some(Reliability::Reliable),
             UNRELIABLE => Some(Reliability::Unreliable),

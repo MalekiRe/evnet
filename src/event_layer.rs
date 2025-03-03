@@ -1,5 +1,5 @@
 use crate::message_layer::{AppExt, MessageReceiver, MessageSender, NetworkMessage, SendType};
-use crate::{Me, Peer};
+use crate::{Me, Peer, connected};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -37,17 +37,17 @@ impl AppExt2 for App {
         self.add_systems(
             Update,
             (|mut event_reader: EventReader<NetworkEvent<T>>,
-              me: Res<Me>,
+              me: Me,
               message_sender: MessageSender<T>| {
                 for NetworkEvent(peer, inner) in event_reader.read() {
-                    if peer == me.0 {
+                    if me == peer {
                         message_sender
                             .send((inner.clone(), SendType::AllButSelf))
                             .unwrap();
                     }
                 }
             })
-            .run_if(resource_exists::<Me>)
+            .run_if(connected)
             .after(crate::message_layer::route_messages),
         );
         self.add_event::<NetworkEvent<T>>();
