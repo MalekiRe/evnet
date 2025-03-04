@@ -1,11 +1,11 @@
+use crate::Peer;
 use crate::message_layer::{AppExt, MessageReceiver, MessageSender, NetworkMessage, SendType};
-use crate::{Peer};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 pub trait AppExt2 {
-    fn add_networked_event<
+    fn add_network_event<
         T: Clone + 'static + NetworkMessage + Serialize + for<'de> Deserialize<'de>,
     >(
         &mut self,
@@ -59,7 +59,7 @@ impl<T: Clone + Serialize + for<'de> Deserialize<'de> + 'static> NetworkEvent<T>
 }
 
 impl AppExt2 for App {
-    fn add_networked_event<
+    fn add_network_event<
         T: Clone + 'static + NetworkMessage + Serialize + for<'de> Deserialize<'de>,
     >(
         &mut self,

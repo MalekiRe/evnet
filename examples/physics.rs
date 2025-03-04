@@ -3,11 +3,8 @@ use bevy::prelude::*;
 use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetworkEntityMapper, NetworkId};
 use evnet::event_layer::{AppExt2, NetworkEventReader, NetworkEventWriter};
 use evnet::message_layer::NetworkMessage;
-use evnet::physics_layer::{PhysicsSyncPlugin};
-use evnet::{
-    Me, NetworkedCommandExt, NetworkingPlugins, PeerConnected, Reliability,
-    connected,
-};
+use evnet::physics_layer::PhysicsSyncPlugin;
+use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, PeerConnected, Reliability, connected};
 use serde::{Deserialize, Serialize};
 
 fn main() {
@@ -18,8 +15,8 @@ fn main() {
             NetworkingPlugins,
             PhysicsSyncPlugin::default(),
         ))
-        .add_networked_event::<SpawnCube>()
-        .add_networked_event::<KillCube>()
+        .add_network_event::<SpawnCube>()
+        .add_network_event::<KillCube>()
         .add_systems(Startup, setup)
         .add_systems(
             Update,

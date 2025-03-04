@@ -9,7 +9,7 @@ fn main() {
         .add_plugins((DefaultPlugins, NetworkingPlugins))
         .add_systems(Startup, setup)
         .add_systems(Update, (update, update2).run_if(resource_exists::<Me>))
-        .add_networked_event::<MyMsg>()
+        .add_network_event::<MyMsg>()
         .run();
 }
 

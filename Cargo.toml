@@ -13,3 +13,4 @@ matchbox_socket = "0.11.0"
 uuid = { version = "1.12.1", features = ["v4"] }
 avian3d = { version = "0.2.1", features = ["serialize"] }
 random-number = "0.1.9"
+evnet-macros = { path = "./evnet-macros"}

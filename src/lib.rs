@@ -5,10 +5,7 @@ pub mod physics_layer;
 
 use bevy::app::{App, Plugin, PluginGroup, PluginGroupBuilder};
 use bevy::ecs::system::SystemParam;
-use bevy::prelude::{
-    Commands, Component, Event, EventWriter, IntoSystemConfigs, Local, PreUpdate, Res, ResMut,
-    Resource, Update, not,
-};
+use bevy::prelude::{Commands, Component, Event, EventWriter, IntoSystemConfigs, Local, PreUpdate, Res, ResMut, Resource, Update, not, EventReader};
 use bevy_matchbox::MatchboxSocket;
 use bevy_matchbox::prelude::PeerId;
 use serde::{Deserialize, Serialize};
@@ -56,13 +53,33 @@ pub fn connected(me: Option<Res<MeRes>>) -> bool {
     me.is_some()
 }
 
+pub fn just_connected(mut local: Local<bool>, me: Option<Res<MeRes>>) -> bool {
+    if *local || me.is_none() {
+        return false;
+    }
+    *local = true;
+    true
+}
+
+pub fn first_peer_connected(mut local: Local<bool>, mut ev: EventReader<PeerConnected>) -> bool {
+    if *local {
+        return false;
+    }
+    if !ev.is_empty() {
+        *local = true;
+        return true;
+    }
+    return false;
+}
+
 pub struct BaseNetworkingPlugin;
 
 impl Plugin for BaseNetworkingPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (|mut commands: Commands, mut socket: ResMut<MatchboxSocket>| {
+            (|mut commands: Commands, socket: Option<ResMut<MatchboxSocket>>| {
+                let Some(mut socket) = socket else { return };
                 let Some(id) = socket.id() else { return };
                 commands.insert_resource(MeRes(id.into()));
             })
@@ -72,9 +89,9 @@ impl Plugin for BaseNetworkingPlugin {
         app.add_event::<PeerConnected>();
         app.add_systems(
             PreUpdate,
-            |mut disconnected: Local<Vec<Peer>>,
-             mut event_writer: EventWriter<PeerDisconnected>,
-             socket: ResMut<MatchboxSocket>| {
+            (|mut disconnected: Local<Vec<Peer>>,
+              mut event_writer: EventWriter<PeerDisconnected>,
+              socket: ResMut<MatchboxSocket>| {
                 for disconnected_peer in socket.disconnected_peers() {
                     let disconnected_peer: Peer = (*disconnected_peer).into();
                     if !disconnected.contains(&disconnected_peer) {
@@ -82,13 +99,15 @@ impl Plugin for BaseNetworkingPlugin {
                         event_writer.send(PeerDisconnected(disconnected_peer));
                     }
                 }
-            },
+            })
+            .run_if(connected),
         );
         app.add_systems(
             PreUpdate,
-            |mut connected: Local<Vec<Peer>>,
-             mut event_writer: EventWriter<PeerConnected>,
-             socket: ResMut<MatchboxSocket>| {
+            (|mut connected: Local<Vec<Peer>>,
+              mut event_writer: EventWriter<PeerConnected>,
+              mut socket: ResMut<MatchboxSocket>| {
+                socket.update_peers();
                 for connected_peer in socket.connected_peers() {
                     let connected_peer: Peer = (connected_peer).into();
                     if !connected.contains(&connected_peer) {
@@ -96,7 +115,8 @@ impl Plugin for BaseNetworkingPlugin {
                         event_writer.send(PeerConnected(connected_peer));
                     }
                 }
-            },
+            })
+            .run_if(connected),
         );
     }
 }
