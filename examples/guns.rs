@@ -207,10 +207,10 @@ fn on_press(
     const AMOUNT: f32 = 0.2;
 
     if keys.pressed(KeyCode::KeyA) {
-        transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, 0.1));
+        transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, 0.01));
     }
     if keys.pressed(KeyCode::KeyD) {
-        transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, -0.1));
+        transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, -0.01));
     }
     let forward = transform.rotation.mul_vec3(Vec3::new(0.0, 0.0, -AMOUNT));
 
@@ -236,10 +236,10 @@ fn on_press(
     }
 
     if keys.pressed(KeyCode::KeyE) {
-        velocity.y += AMOUNT * 0.01;
+        velocity.y += AMOUNT * 2.0;
     }
     if keys.pressed(KeyCode::KeyR) {
-        velocity.y -= AMOUNT * 0.01;
+        velocity.y -= AMOUNT * 2.0;
     }
 
     if let Ok(mut cam_transform) = camera.get_single_mut() {
