@@ -25,7 +25,10 @@ pub const CHARACTER_CAPSULE_HEIGHT: f32 = 0.5;
 
 fn main() {
     App::new()
-        .insert_resource(AmbientLight::default())
+        .insert_resource(AmbientLight {
+            color: Default::default(),
+            brightness: 100.0,
+        })
         .add_plugins(DefaultPlugins)
         .add_plugins(NetworkingPlugins)
         .add_plugins(PhysicsSyncPlugin::default())
@@ -244,8 +247,8 @@ fn on_press(
     if let Ok(mut cam_transform) = camera.get_single_mut() {
         // Position the camera at a fixed offset behind and above the player
         // Higher Y value and further back Z value for 45-degree angle
-        let behind_offset = 30.0; // Distance behind player
-        let height_offset = 10.0; // Height above player
+        let behind_offset = 50.0; // Distance behind player
+        let height_offset = 30.0; // Height above player
 
         // Get the backward direction from the player's rotation (opposite of forward)
         let backward_dir = transform.rotation.mul_vec3(Vec3::new(0.0, 0.0, 1.0)).normalize();
