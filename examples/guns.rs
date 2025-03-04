@@ -193,7 +193,7 @@ fn on_press(
         return;
     };
 
-    const AMOUNT: f32 = 0.5;
+    const AMOUNT: f32 = 0.2;
 
     if keys.pressed(KeyCode::KeyA) {
         transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, 0.1));
