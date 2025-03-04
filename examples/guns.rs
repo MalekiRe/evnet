@@ -25,6 +25,7 @@ pub const CHARACTER_CAPSULE_HEIGHT: f32 = 0.5;
 
 fn main() {
     App::new()
+        .insert_resource(AmbientLight::default())
         .add_plugins(DefaultPlugins)
         .add_plugins(NetworkingPlugins)
         .add_plugins(PhysicsSyncPlugin::default())
@@ -41,6 +42,7 @@ fn main() {
                 spawn_bullet,
                 when_gib_all_data_received,
                 respawn,
+                despawn_bullet,
             )
                 .run_if(connected),
         )
@@ -104,6 +106,14 @@ pub struct GibAllData;
 
 #[derive(Component)]
 pub struct Bullet;
+
+fn despawn_bullet(mut commands: Commands, query: Query<(Entity, &Transform), With<Bullet>>) {
+    for (e, t) in query.iter() {
+        if t.translation.y <= -5.0 {
+            commands.entity(e).despawn();
+        }
+    }
+}
 
 fn setup(
     mut commands: Commands,
