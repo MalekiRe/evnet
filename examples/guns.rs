@@ -27,7 +27,7 @@ fn main() {
     App::new()
         .insert_resource(AmbientLight {
             color: Default::default(),
-            brightness: 100.0,
+            brightness: 800.0,
         })
         .add_plugins(DefaultPlugins)
         .add_plugins(NetworkingPlugins)
@@ -331,7 +331,7 @@ fn spawn_bullet(
             RigidBody::Dynamic,
             Collider::sphere(0.1),
             Mesh3d(meshes.add(Sphere::new(0.1))),
-            MeshMaterial3d(materials.add(Color::srgb_u8(0, 200, 20))),
+            MeshMaterial3d(materials.add(Color::srgb_u8(100, 255, 100))),
             *network_id,
             Mass(30.0),
             LinearVelocity(*velocity),
