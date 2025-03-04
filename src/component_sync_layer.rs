@@ -80,9 +80,14 @@ impl<
                     let Some(e) = entity_mapper.0.get(&network_id) else {
                         continue;
                     };
-                    let Ok((mut _sync_net2, mut authority2, mut c0)) = query.get_mut(*e) else {
+                    let Ok((mut network_id2, mut authority2, mut c0)) = query.get_mut(*e) else {
                         continue;
                     };
+                    if authority.0 == authority2.as_ref().0 && network_id.1 > network_id2.1 {
+                        commands.entity(*e).insert(LocalNet);
+                    } else {
+                        network_id2.1 = network_id.1;
+                    }
                     if authority.0 > authority2.as_ref().0 {
                         commands.entity(*e).remove::<LocalNet>();
                         *authority2 = authority;
@@ -142,10 +147,15 @@ impl<
                     let Some(e) = entity_mapper.0.get(&network_id) else {
                         continue;
                     };
-                    let Ok((mut _sync_net2, mut authority2, mut c0, mut c1)) = query.get_mut(*e)
+                    let Ok((mut network_id2, mut authority2, mut c0, mut c1)) = query.get_mut(*e)
                     else {
                         continue;
                     };
+                    if authority.0 == authority2.as_ref().0 && network_id.1 > network_id2.1 {
+                        commands.entity(*e).insert(LocalNet);
+                    } else {
+                        network_id2.1 = network_id.1;
+                    }
                     if authority.0 > authority2.as_ref().0 {
                         commands.entity(*e).remove::<LocalNet>();
                         *authority2 = authority;
@@ -216,11 +226,16 @@ impl<
                     let Some(e) = entity_mapper.0.get(&network_id) else {
                         continue;
                     };
-                    let Ok((_sync_net2, mut authority2, mut c0, mut c1, mut c2)) =
+                    let Ok((mut network_id2, mut authority2, mut c0, mut c1, mut c2)) =
                         query.get_mut(*e)
                     else {
                         continue;
                     };
+                    if authority.0 == authority2.as_ref().0 && network_id.1 > network_id2.1 {
+                        commands.entity(*e).insert(LocalNet);
+                    } else {
+                        network_id2.1 = network_id.1;
+                    }
                     if authority.0 > authority2.as_ref().0 {
                         commands.entity(*e).remove::<LocalNet>();
                         *authority2 = authority;
@@ -294,11 +309,16 @@ impl<
                     let Some(e) = entity_mapper.0.get(&network_id) else {
                         continue;
                     };
-                    let Ok((_sync_net2, mut authority2, mut c0, mut c1, mut c2, mut c3)) =
+                    let Ok((mut network_id2, mut authority2, mut c0, mut c1, mut c2, mut c3)) =
                         query.get_mut(*e)
                     else {
                         continue;
                     };
+                    if authority.0 == authority2.as_ref().0 && network_id.1 > network_id2.1 {
+                        commands.entity(*e).insert(LocalNet);
+                    } else {
+                        network_id2.1 = network_id.1;
+                    }
                     if authority.0 > authority2.as_ref().0 {
                         commands.entity(*e).remove::<LocalNet>();
                         *authority2 = authority;
