@@ -193,7 +193,7 @@ fn on_press(
         return;
     };
 
-    const AMOUNT: f32 = 0.1;
+    const AMOUNT: f32 = 0.5;
 
     if keys.pressed(KeyCode::KeyA) {
         transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, 0.1));
@@ -206,8 +206,8 @@ fn on_press(
     if keys.just_pressed(KeyCode::Space) {
         ev.send(SpawnBullet(
             NetworkId::new(&me),
-            transform.translation.add(forward.mul(5.0)),
-            forward.mul(300.0)
+            transform.translation.add(forward.mul(1.0)),
+            forward.mul(100.0)
         ));
     }
 
@@ -225,10 +225,10 @@ fn on_press(
     }
 
     if keys.pressed(KeyCode::KeyE) {
-        velocity.y += AMOUNT * 2.0;
+        velocity.y += AMOUNT * 0.1;
     }
     if keys.pressed(KeyCode::KeyR) {
-        velocity.y -= AMOUNT * 2.0;
+        velocity.y -= AMOUNT * 0.1;
     }
 
     if let Ok(mut cam_transform) = camera.get_single_mut() {
