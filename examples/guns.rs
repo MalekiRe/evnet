@@ -43,8 +43,8 @@ fn main() {
             )
                 .run_if(connected),
         )
-        .add_systems(Update, on_self_connect.run_if(just_connected))
-        .add_systems(Update, try_get_peer.run_if(first_peer_connected))
+        //.add_systems(Update, on_self_connect.run_if(just_connected))
+        .add_systems(Update, (try_get_peer, on_self_connect).run_if(first_peer_connected))
         .run();
 }
 
