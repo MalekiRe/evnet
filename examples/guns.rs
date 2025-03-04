@@ -109,6 +109,23 @@ fn setup(
         MeshMaterial3d(materials.add(Color::srgb(0.5, 0.5, 0.6))),
         Transform::from_xyz(0.0, -3.0, 0.0),
     ));
+
+    commands.spawn((
+        Collider::cuboid(0.5, 0.5, 0.5),
+        RigidBody::Static,
+        Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
+        MeshMaterial3d(materials.add(Color::srgb(0.0, 0.8, 0.8))),
+        Transform::from_xyz(1.0, -2.0, 0.0),
+    ));
+
+    commands.spawn((
+        Collider::cuboid(0.5, 0.5, 0.5),
+        RigidBody::Static,
+        Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
+        MeshMaterial3d(materials.add(Color::srgb(0.0, 0.8, 0.8))),
+        Transform::from_xyz(1.0, -2.0, -3.0),
+    ));
+
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(-2.5, 4.5, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
