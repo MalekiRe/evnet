@@ -212,14 +212,14 @@ fn on_press(
     }
 
     if keys.pressed(KeyCode::KeyW) {
-        position.z += forward.z;
-        position.x += forward.x;
+        //position.z += forward.z;
+        //position.x += forward.x;
         velocity.z += forward.z;
         velocity.x += forward.x;
     }
     if keys.pressed(KeyCode::KeyS) {
-        position.z -= forward.z;
-        position.x -= forward.x;
+        //position.z -= forward.z;
+        //position.x -= forward.x;
         velocity.z -= forward.z;
         velocity.x -= forward.x;
     }
