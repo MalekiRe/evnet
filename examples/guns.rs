@@ -71,7 +71,7 @@ impl CharacterPhysicsBundle {
                 .lock_rotation_x()
                 .lock_rotation_y()
                 .lock_rotation_z(),
-            friction: Friction::new(0.0).with_combine_rule(CoefficientCombine::Min),
+            friction: Friction::new(0.5).with_combine_rule(CoefficientCombine::Min),
             mesh: Mesh3d(meshes.add(Capsule3d::new(
                 CHARACTER_CAPSULE_RADIUS,
                 CHARACTER_CAPSULE_HEIGHT,
@@ -82,7 +82,7 @@ impl CharacterPhysicsBundle {
 }
 
 #[derive(NetworkMessage, Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct SpawnPlayer(NetworkId);
+pub struct SpawnPlayer(NetworkId, Vec3);
 
 #[derive(NetworkMessage, Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct SpawnBullet(NetworkId, Vec3);
@@ -142,6 +142,7 @@ fn on_spawn_player(
         let mut e = commands.spawn((
             CharacterPhysicsBundle::new(&mut meshes, &mut materials),
             spawn_player.0,
+            Transform::from_translation(spawn_player.1),
             Player(*peer),
             DespawnOnDisconnect(*peer),
         ));
@@ -175,15 +176,19 @@ fn on_press(
 
     if keys.pressed(KeyCode::KeyA) {
         position.x -= AMOUNT;
+        velocity.x -= AMOUNT;
     }
     if keys.pressed(KeyCode::KeyD) {
         position.x += AMOUNT;
+        velocity.x += AMOUNT;
     }
     if keys.pressed(KeyCode::KeyW) {
         position.z -= AMOUNT;
+        velocity.z -= AMOUNT;
     }
     if keys.pressed(KeyCode::KeyS) {
         position.z += AMOUNT;
+        velocity.z += AMOUNT;
     }
     if keys.pressed(KeyCode::KeyE) {
         velocity.y += AMOUNT * 2.0;
@@ -197,7 +202,7 @@ fn on_press(
 }
 
 fn on_self_connect(mut ev: NetworkEventWriter<SpawnPlayer>, me: Me) {
-    ev.send(SpawnPlayer(NetworkId::new(&me)));
+    ev.send(SpawnPlayer(NetworkId::new(&me), Vec3::default()));
 }
 
 fn try_get_peer(
@@ -211,6 +216,7 @@ fn try_get_peer(
     for peer_connected in event_reader.read() {
         ev.send_to(GibAllData, SendType::One(peer_connected.get()));
         *local = true;
+        return;
     }
 }
 
@@ -219,7 +225,7 @@ fn when_gib_all_data_received(
     mut bullet_ev: NetworkEventWriter<SpawnBullet>,
     mut player_ev: NetworkEventWriter<SpawnPlayer>,
     bullets: Query<(&NetworkId, &Transform), With<Bullet>>,
-    players: Query<&NetworkId, With<Player>>,
+    players: Query<(&NetworkId, &Transform), With<Player>>,
 ) {
     for (peer, _) in ev.read() {
         println!("got gib all data");
@@ -229,9 +235,9 @@ fn when_gib_all_data_received(
                 SendType::One(*peer),
             );
         }
-        for player in players.iter() {
+        for (player, transform) in players.iter() {
             println!("sending spawn player");
-            player_ev.send_to(SpawnPlayer(*player), SendType::One(*peer));
+            player_ev.send_to(SpawnPlayer(*player, transform.translation), SendType::One(*peer));
         }
     }
 }
