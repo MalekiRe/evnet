@@ -236,10 +236,10 @@ fn on_press(
     }
 
     if keys.pressed(KeyCode::KeyE) {
-        velocity.y += AMOUNT * 0.1;
+        velocity.y += AMOUNT * 0.01;
     }
     if keys.pressed(KeyCode::KeyR) {
-        velocity.y -= AMOUNT * 0.1;
+        velocity.y -= AMOUNT * 0.01;
     }
 
     if let Ok(mut cam_transform) = camera.get_single_mut() {
