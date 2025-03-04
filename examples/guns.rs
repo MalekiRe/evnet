@@ -12,7 +12,7 @@ use evnet::physics_layer::PhysicsSyncPlugin;
 use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, Peer, PeerConnected, connected, just_connected, first_peer_connected};
 use evnet_macros::NetworkMessage;
 use serde::{Deserialize, Serialize};
-use std::ops::Add;
+use std::ops::{Add, Mul, MulAssign};
 
 pub const FLOOR_WIDTH: f32 = 100.0;
 pub const FLOOR_HEIGHT: f32 = 1.0;
@@ -85,7 +85,7 @@ impl CharacterPhysicsBundle {
 pub struct SpawnPlayer(NetworkId, Vec3);
 
 #[derive(NetworkMessage, Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct SpawnBullet(NetworkId, Vec3);
+pub struct SpawnBullet(NetworkId, Vec3, Vec3);
 
 #[derive(Component)]
 pub struct Player(Peer);
@@ -156,49 +156,87 @@ fn on_spawn_player(
 fn on_press(
     keys: Res<ButtonInput<KeyCode>>,
     mut query: Query<
-        (&mut Position, &mut LinearVelocity, &Transform),
+        (&mut Position, &mut LinearVelocity, &mut Transform),
         (With<Player>, With<LocalNet>, Without<Camera3d>),
     >,
     mut camera: Query<&mut Transform, With<Camera3d>>,
     mut ev: NetworkEventWriter<SpawnBullet>,
     me: Me,
 ) {
-    let Ok((mut position, mut velocity, transform)) = query.get_single_mut() else {
+    let Ok((mut position, mut velocity, mut transform)) = query.get_single_mut() else {
         return;
     };
-    if keys.just_pressed(KeyCode::Space) {
-        ev.send(SpawnBullet(
-            NetworkId::new(&me),
-            transform.translation.add(Vec3::new(0.0, 0.0, -3.0)),
-        ));
-    }
+
     const AMOUNT: f32 = 0.1;
 
     if keys.pressed(KeyCode::KeyA) {
-        position.x -= AMOUNT;
-        velocity.x -= AMOUNT;
+        transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, 0.1));
     }
     if keys.pressed(KeyCode::KeyD) {
-        position.x += AMOUNT;
-        velocity.x += AMOUNT;
+        transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, -0.1));
     }
+    let forward = transform.rotation.mul_vec3(Vec3::new(0.0, 0.0, -AMOUNT));
+
+    if keys.just_pressed(KeyCode::Space) {
+        ev.send(SpawnBullet(
+            NetworkId::new(&me),
+            transform.translation.add(forward.mul(5.0)),
+            forward.mul(300.0)
+        ));
+    }
+
     if keys.pressed(KeyCode::KeyW) {
-        position.z -= AMOUNT;
-        velocity.z -= AMOUNT;
+        position.z += forward.z;
+        position.x += forward.x;
+        velocity.z += forward.z;
+        velocity.x += forward.x;
     }
     if keys.pressed(KeyCode::KeyS) {
-        position.z += AMOUNT;
-        velocity.z += AMOUNT;
+        position.z -= forward.z;
+        position.x -= forward.x;
+        velocity.z -= forward.z;
+        velocity.x -= forward.x;
     }
+
     if keys.pressed(KeyCode::KeyE) {
         velocity.y += AMOUNT * 2.0;
     }
     if keys.pressed(KeyCode::KeyR) {
         velocity.y -= AMOUNT * 2.0;
     }
-    camera.single_mut().translation.x = transform.translation.x;
-    camera.single_mut().translation.y = transform.translation.y + 5.0;
-    camera.single_mut().translation.z = transform.translation.z + 8.0;
+
+    if let Ok(mut cam_transform) = camera.get_single_mut() {
+        // Position the camera at a fixed offset behind and above the player
+        // Higher Y value and further back Z value for 45-degree angle
+        let behind_offset = 10.0; // Distance behind player
+        let height_offset = 10.0; // Height above player
+
+        // Get the backward direction from the player's rotation (opposite of forward)
+        let backward_dir = transform.rotation.mul_vec3(Vec3::new(0.0, 0.0, 1.0)).normalize();
+
+        // Calculate camera position
+        let camera_pos = transform.translation +
+            (backward_dir * behind_offset) +
+            Vec3::new(0.0, height_offset, 0.0);
+
+        cam_transform.translation = camera_pos;
+
+        // Create a rotation that looks from the camera position to the player
+        // This creates a stable 45-degree downward angle
+        let look_dir = (transform.translation - camera_pos).normalize();
+
+        // Use a stable up vector to prevent flipping
+        let up = Vec3::Y;
+
+        // Create look-at rotation that won't flip
+        let forward = -look_dir; // Camera looks in the negative Z direction
+        let right = up.cross(forward).normalize();
+        let corrected_up = forward.cross(right).normalize();
+
+        // Construct a stable rotation matrix
+        let rotation_mat = Mat3::from_cols(right, corrected_up, forward);
+        cam_transform.rotation = Quat::from_mat3(&rotation_mat);
+    }
 }
 
 fn on_self_connect(mut ev: NetworkEventWriter<SpawnPlayer>, me: Me) {
@@ -231,7 +269,7 @@ fn when_gib_all_data_received(
         println!("got gib all data");
         for (network_id, transform) in bullets.iter() {
             bullet_ev.send_to(
-                SpawnBullet(*network_id, transform.translation),
+                SpawnBullet(*network_id, transform.translation, Vec3::ZERO),
                 SendType::One(*peer),
             );
         }
@@ -249,7 +287,7 @@ fn spawn_bullet(
     mut ev: NetworkEventReader<SpawnBullet>,
     me: Me,
 ) {
-    for (peer, SpawnBullet(network_id, position)) in ev.read() {
+    for (peer, SpawnBullet(network_id, position, velocity)) in ev.read() {
         let mut e = commands.spawn((
             RigidBody::Dynamic,
             Collider::sphere(0.1),
@@ -257,7 +295,7 @@ fn spawn_bullet(
             MeshMaterial3d(materials.add(Color::srgb_u8(0, 200, 20))),
             *network_id,
             Mass(30.0),
-            LinearVelocity(Vector::new(0.0, 0.0, -4.0)),
+            LinearVelocity(*velocity),
             Transform::from_translation(*position),
             Bullet,
         ));
