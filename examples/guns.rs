@@ -1,9 +1,6 @@
 use avian3d::PhysicsPlugins;
 use avian3d::math::Vector;
-use avian3d::prelude::{
-    CoefficientCombine, Collider, ExternalForce, ExternalImpulse, Friction, LinearVelocity,
-    LockedAxes, Mass, Position, RigidBody,
-};
+use avian3d::prelude::{CoefficientCombine, Collider, ExternalForce, ExternalImpulse, Friction, LinearVelocity, LockedAxes, Mass, Position, RigidBody, TransformInterpolation};
 use bevy::prelude::*;
 use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetworkEntityMapper, NetworkId};
 use evnet::event_layer::{AppExt2, NetworkEventReader, NetworkEventWriter};
@@ -184,6 +181,7 @@ fn on_spawn_player(
             Transform::from_translation(spawn_player.1),
             Player(*peer),
             DespawnOnDisconnect(*peer),
+            TransformInterpolation,
         ));
         if me == peer {
             e.insert(LocalNet);
@@ -337,6 +335,7 @@ fn spawn_bullet(
             LinearVelocity(*velocity),
             Transform::from_translation(*position),
             Bullet,
+            TransformInterpolation,
         ));
         if me == peer {
             e.insert(LocalNet);
