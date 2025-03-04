@@ -40,6 +40,7 @@ fn main() {
                 on_press,
                 spawn_bullet,
                 when_gib_all_data_received,
+                respawn,
             )
                 .run_if(connected),
         )
@@ -58,6 +59,14 @@ pub(crate) struct CharacterPhysicsBundle {
     friction: Friction,
     mesh: Mesh3d,
     material: MeshMaterial3d<StandardMaterial>,
+}
+
+fn respawn(mut query: Query<&mut Transform, With<Player>>) {
+    for mut t in query.iter_mut() {
+        if t.translation.y <= -30.0 {
+            t.translation = Vec3::new(0.0, 10.0, 0.0);
+        }
+    }
 }
 
 impl CharacterPhysicsBundle {
@@ -225,7 +234,7 @@ fn on_press(
     if let Ok(mut cam_transform) = camera.get_single_mut() {
         // Position the camera at a fixed offset behind and above the player
         // Higher Y value and further back Z value for 45-degree angle
-        let behind_offset = 10.0; // Distance behind player
+        let behind_offset = 30.0; // Distance behind player
         let height_offset = 10.0; // Height above player
 
         // Get the backward direction from the player's rotation (opposite of forward)
