@@ -2,10 +2,15 @@ pub mod component_sync_layer;
 pub mod event_layer;
 pub mod message_layer;
 pub mod physics_layer;
+pub mod voip_layer;
 
+use std::collections::HashMap;
 use bevy::app::{App, Plugin, PluginGroup, PluginGroupBuilder};
 use bevy::ecs::system::SystemParam;
-use bevy::prelude::{Commands, Component, Event, EventWriter, IntoSystemConfigs, Local, PreUpdate, Res, ResMut, Resource, Update, not, EventReader};
+use bevy::prelude::{
+    Commands, Component, Event, EventReader, EventWriter, IntoSystemConfigs, Local, PreUpdate, Res,
+    ResMut, Resource, Update, not,
+};
 use bevy_matchbox::MatchboxSocket;
 use bevy_matchbox::prelude::PeerId;
 use serde::{Deserialize, Serialize};
@@ -106,14 +111,25 @@ impl Plugin for BaseNetworkingPlugin {
             PreUpdate,
             (|mut connected: Local<Vec<Peer>>,
               mut event_writer: EventWriter<PeerConnected>,
-              mut socket: ResMut<MatchboxSocket>| {
+              mut socket: ResMut<MatchboxSocket>, mut buffer: Local<HashMap<Peer, u32>>| {
                 socket.update_peers();
                 for connected_peer in socket.connected_peers() {
                     let connected_peer: Peer = (connected_peer).into();
                     if !connected.contains(&connected_peer) {
+                        buffer.insert(connected_peer, 0);
                         connected.push(connected_peer);
-                        event_writer.send(PeerConnected(connected_peer));
                     }
+                }
+                let mut to_remove = vec![];
+                for (p, mut u) in buffer.iter_mut() {
+                    *u += 1;
+                    if *u >= 10 {
+                        to_remove.push(*p);
+                    }
+                }
+                for p in to_remove {
+                    event_writer.send(PeerConnected(p));
+                    buffer.remove(&p);
                 }
             })
             .run_if(connected),

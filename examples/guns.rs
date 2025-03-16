@@ -1,12 +1,20 @@
 use avian3d::PhysicsPlugins;
 use avian3d::math::Vector;
-use avian3d::prelude::{CoefficientCombine, Collider, ExternalForce, ExternalImpulse, Friction, LinearVelocity, LockedAxes, Mass, Position, RigidBody, TransformInterpolation};
+use avian3d::prelude::{
+    CoefficientCombine, Collider, ExternalForce, ExternalImpulse, Friction, LinearVelocity,
+    LockedAxes, Mass, Position, RigidBody, TransformInterpolation,
+};
 use bevy::prelude::*;
+use bevy_mod_audio::spatial_audio::SpatialAudioListener;
 use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetworkEntityMapper, NetworkId};
 use evnet::event_layer::{AppExt2, NetworkEventReader, NetworkEventWriter};
 use evnet::message_layer::SendType;
 use evnet::physics_layer::PhysicsSyncPlugin;
-use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, Peer, PeerConnected, connected, just_connected, first_peer_connected};
+use evnet::voip_layer::VoipPlugin;
+use evnet::{
+    Me, NetworkedCommandExt, NetworkingPlugins, Peer, PeerConnected, connected,
+    first_peer_connected, just_connected,
+};
 use evnet_macros::NetworkMessage;
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Mul, MulAssign};
@@ -30,6 +38,7 @@ fn main() {
         .add_plugins(NetworkingPlugins)
         .add_plugins(PhysicsSyncPlugin::default())
         .add_plugins(PhysicsPlugins::default())
+        .add_plugins(VoipPlugin)
         .add_network_event::<SpawnPlayer>()
         .add_network_event::<SpawnBullet>()
         .add_network_event::<GibAllData>()
@@ -47,7 +56,10 @@ fn main() {
                 .run_if(connected),
         )
         //.add_systems(Update, on_self_connect.run_if(just_connected))
-        .add_systems(Update, (try_get_peer, on_self_connect).run_if(first_peer_connected))
+        .add_systems(
+            Update,
+            (try_get_peer, on_self_connect).run_if(first_peer_connected),
+        )
         .run();
 }
 
@@ -63,7 +75,7 @@ pub(crate) struct CharacterPhysicsBundle {
     material: MeshMaterial3d<StandardMaterial>,
 }
 
-fn respawn(mut query: Query<&mut Transform, With<Player>>) {
+fn respawn(mut query: Query<&mut Transform, With<Peer>>) {
     for mut t in query.iter_mut() {
         if t.translation.y <= -30.0 {
             t.translation = Vec3::new(0.0, 10.0, 0.0);
@@ -98,8 +110,6 @@ pub struct SpawnPlayer(NetworkId, Vec3);
 #[derive(NetworkMessage, Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct SpawnBullet(NetworkId, Vec3, Vec3);
 
-#[derive(Component)]
-pub struct Player(Peer);
 
 #[derive(NetworkMessage, Deserialize, Serialize, Clone, Debug)]
 pub struct GibAllData;
@@ -179,13 +189,14 @@ fn on_spawn_player(
             CharacterPhysicsBundle::new(&mut meshes, &mut materials),
             spawn_player.0,
             Transform::from_translation(spawn_player.1),
-            Player(*peer),
+            *peer,
             DespawnOnDisconnect(*peer),
             TransformInterpolation,
         ));
         if me == peer {
             e.insert(LocalNet);
             e.insert(MeshMaterial3d(materials.add(Color::srgb(0.0, 0.0, 1.0))));
+            e.insert(SpatialAudioListener);
         }
     }
 }
@@ -194,7 +205,7 @@ fn on_press(
     keys: Res<ButtonInput<KeyCode>>,
     mut query: Query<
         (&mut Position, &mut LinearVelocity, &mut Transform),
-        (With<Player>, With<LocalNet>, Without<Camera3d>),
+        (With<Peer>, With<LocalNet>, Without<Camera3d>),
     >,
     mut camera: Query<&mut Transform, With<Camera3d>>,
     mut ev: NetworkEventWriter<SpawnBullet>,
@@ -207,10 +218,14 @@ fn on_press(
     const AMOUNT: f32 = 0.2;
 
     if keys.pressed(KeyCode::KeyA) {
-        transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, 0.01));
+        transform
+            .rotation
+            .mul_assign(Quat::from_axis_angle(Vec3::Y, 0.01));
     }
     if keys.pressed(KeyCode::KeyD) {
-        transform.rotation.mul_assign(Quat::from_axis_angle(Vec3::Y, -0.01));
+        transform
+            .rotation
+            .mul_assign(Quat::from_axis_angle(Vec3::Y, -0.01));
     }
     let forward = transform.rotation.mul_vec3(Vec3::new(0.0, 0.0, -AMOUNT));
 
@@ -218,7 +233,7 @@ fn on_press(
         ev.send(SpawnBullet(
             NetworkId::new(&me),
             transform.translation.add(forward.mul(1.0)),
-            forward.mul(100.0)
+            forward.mul(100.0),
         ));
     }
 
@@ -249,12 +264,15 @@ fn on_press(
         let height_offset = 30.0; // Height above player
 
         // Get the backward direction from the player's rotation (opposite of forward)
-        let backward_dir = transform.rotation.mul_vec3(Vec3::new(0.0, 0.0, 1.0)).normalize();
+        let backward_dir = transform
+            .rotation
+            .mul_vec3(Vec3::new(0.0, 0.0, 1.0))
+            .normalize();
 
         // Calculate camera position
-        let camera_pos = transform.translation +
-            (backward_dir * behind_offset) +
-            Vec3::new(0.0, height_offset, 0.0);
+        let camera_pos = transform.translation
+            + (backward_dir * behind_offset)
+            + Vec3::new(0.0, height_offset, 0.0);
 
         cam_transform.translation = camera_pos;
 
@@ -300,7 +318,7 @@ fn when_gib_all_data_received(
     mut bullet_ev: NetworkEventWriter<SpawnBullet>,
     mut player_ev: NetworkEventWriter<SpawnPlayer>,
     bullets: Query<(&NetworkId, &Transform), With<Bullet>>,
-    players: Query<(&NetworkId, &Transform), With<Player>>,
+    players: Query<(&NetworkId, &Transform), With<Peer>>,
 ) {
     for (peer, _) in ev.read() {
         println!("got gib all data");
@@ -312,7 +330,10 @@ fn when_gib_all_data_received(
         }
         for (player, transform) in players.iter() {
             println!("sending spawn player");
-            player_ev.send_to(SpawnPlayer(*player, transform.translation), SendType::One(*peer));
+            player_ev.send_to(
+                SpawnPlayer(*player, transform.translation),
+                SendType::One(*peer),
+            );
         }
     }
 }

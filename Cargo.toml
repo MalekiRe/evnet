@@ -14,3 +14,12 @@ uuid = { version = "1.12.1", features = ["v4"] }
 avian3d = { version = "0.2.1", features = ["serialize"] }
 random-number = "0.1.9"
 evnet-macros = { path = "./evnet-macros"}
+bevy_mod_audio = "0.1.0-rc1"
+rodio = "0.20.1"
+[dependencies.opus]
+git = "https://github.com/Schmarni-Dev/opus-rs"
+branch = "unsafe-libopus"
+default-features = false
+features = [
+    "unsafe-libopus-backend",
+]
