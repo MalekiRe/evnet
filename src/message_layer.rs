@@ -1,5 +1,5 @@
 use crate::message_layer::outgoing::SenderRes;
-use crate::{MeRes, Peer, RELIABLE, Reliability, UNRELIABLE, UNRELIABLE_ORDERED, connected};
+use crate::{Me, Peer, RELIABLE, Reliability, UNRELIABLE, UNRELIABLE_ORDERED, MeRes, connected};
 use bevy::ecs::archetype::ArchetypeComponentId;
 use bevy::ecs::component::{ComponentId, Tick};
 use bevy::ecs::query::Access;
@@ -15,6 +15,9 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+use std::time::Duration;
+use avian3d::prelude::{AngularVelocity, LinearVelocity, Position, Rotation};
+use crate::conditioner::{LinkConditioner, LinkConditionerConfig};
 
 // This is the base layer
 pub trait NetworkMessage: Serialize + for<'de> Deserialize<'de> + Send + Sync {
@@ -43,7 +46,6 @@ impl MessageWrapper {
     }
 }
 
-#[derive(Clone, Debug)]
 pub enum SendType {
     All,
     AllButSelf,
@@ -106,11 +108,9 @@ impl<'w, Message: Send + Sync + 'static> DerefMut for MessageSender<'w, Message>
 
 #[derive(Resource, Default)]
 pub struct MessageRouter {
-    pub route_incoming_messages: HashMap<u32, Box<dyn Fn(&[u8], Peer) + Send + Sync + 'static>>,
+    pub route_incoming_messages: HashMap<u32, Box<dyn FnMut(Vec<u8>, Peer) + Send + Sync + 'static>>,
     pub route_outgoing_messages: Vec<
-        Box<
-            dyn Fn(&mut MatchboxSocket, &MeRes, &[matchbox_socket::PeerId]) + Send + Sync + 'static,
-        >,
+        Box<dyn Fn(&mut MatchboxSocket, Peer, &[matchbox_socket::PeerId]) + Send + Sync + 'static>,
     >,
 }
 
@@ -135,7 +135,7 @@ pub(crate) fn route_messages(world: &mut World) {
         .unwrap()
         .connected_peers()
         .collect::<Vec<_>>();
-    world.resource_scope(|world, networked_messages: Mut<MessageRouter>| {
+    world.resource_scope(|world, mut networked_messages: Mut<MessageRouter>| {
         world.resource_scope(|_world, mut socket: Mut<MatchboxSocket>| {
             for (peer_id, msg) in socket
                 .channel_mut(RELIABLE)
@@ -152,12 +152,12 @@ pub(crate) fn route_messages(world: &mut World) {
             {
                 let route_incoming_messages = networked_messages
                     .route_incoming_messages
-                    .get(&msg.type_id_hash)
+                    .get_mut(&msg.type_id_hash)
                     .unwrap();
-                route_incoming_messages(&msg.content, peer_id.into());
+                route_incoming_messages(msg.content, peer_id.into());
             }
             for route_outgoing_messages in &networked_messages.route_outgoing_messages {
-                route_outgoing_messages(&mut socket, &me, &peers);
+                route_outgoing_messages(&mut socket, me.0, &peers);
             }
         });
     });
@@ -183,24 +183,49 @@ impl AppExt for App {
         self.add_systems(Update, input_wrapper);
         let incoming_tx_2 = incoming_tx.clone();
         self.insert_resource(SenderRes(outgoing_tx));
-        self.world_mut()
-            .resource_mut::<MessageRouter>()
-            .route_incoming_messages
-            .insert(
-                MessageWrapper::hash::<Message>(),
-                Box::new(move |bytes: &[u8], peer: Peer| {
-                    incoming_tx
-                        .send((bincode::deserialize(bytes).unwrap(), peer))
-                        .unwrap();
-                }),
-            );
+        self.world_mut().insert_resource(LinkConditioner::<crate::component_sync_layer::SyncMsg<crate::physics_layer::Physics, (Position, Rotation, LinearVelocity, AngularVelocity)>>::new(LinkConditionerConfig {
+            incoming_latency: Duration::new(2, 0),
+            incoming_jitter: Default::default(),
+            incoming_loss: 0.0,
+        }));
+        if let Some(mut conditioner) = self.world_mut().remove_resource::<LinkConditioner<Message>>() {
+            println!("UwU");
+            self.world_mut()
+                .resource_mut::<MessageRouter>()
+                .route_incoming_messages
+                .insert(
+                    MessageWrapper::hash::<Message>(),
+                    Box::new(move |bytes: Vec<u8>, peer: Peer| {
+                        conditioner.condition_packet(bytes, peer);
+                        let mut v = vec![];
+                        while let Some((bytes, peer)) = conditioner.pop_packet() {
+                            v.push((bytes, peer));
+                        }
+                        for (bytes, peer) in v.into_iter() {
+                            incoming_tx
+                                .send((bincode::deserialize(&bytes).unwrap(), peer))
+                                .unwrap();
+                        }
+                    }),
+                );
+        } else {
+            self.world_mut()
+                .resource_mut::<MessageRouter>()
+                .route_incoming_messages
+                .insert(
+                    MessageWrapper::hash::<Message>(),
+                    Box::new(move |bytes: Vec<u8>, peer: Peer| {
+                        incoming_tx
+                            .send((bincode::deserialize(&bytes).unwrap(), peer))
+                            .unwrap();
+                    }),
+                );
+        }
         self.world_mut()
             .resource_mut::<MessageRouter>()
             .route_outgoing_messages
             .push(Box::new(
-                move |socket: &mut MatchboxSocket,
-                      me: &MeRes,
-                      peers: &[matchbox_socket::PeerId]| {
+                move |socket: &mut MatchboxSocket, me: Peer, peers: &[matchbox_socket::PeerId]| {
                     for (message, sender) in outgoing_rx.try_iter() {
                         let channel = socket.channel_mut(Message::RELIABILITY as usize);
                         let msg_bytes = MessageWrapper::serialize(&message);
@@ -213,7 +238,7 @@ impl AppExt for App {
                                         error!("{}", err);
                                     }
                                 }
-                                incoming_tx_2.send((message, me.0)).unwrap()
+                                incoming_tx_2.send((message, me)).unwrap()
                             }
                             SendType::AllButSelf => {
                                 for peer in peers {

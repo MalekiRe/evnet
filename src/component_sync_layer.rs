@@ -366,10 +366,10 @@ impl<
 
 #[derive(Serialize, Deserialize)]
 pub struct SyncMsg<ReliabilityImplementor: NetworkMessage, Data: Send + Sync + 'static> {
-    network_id: NetworkId,
-    authority: Authority,
-    data: Data,
-    phantom_data: PhantomData<ReliabilityImplementor>,
+    pub network_id: NetworkId,
+    pub authority: Authority,
+    pub data: Data,
+    pub phantom_data: PhantomData<ReliabilityImplementor>,
 }
 
 impl<
@@ -383,7 +383,7 @@ impl<
 pub struct NetworkEntityMapper(pub HashMap<NetworkId, Entity>);
 pub struct LocalNet;
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, Hash, PartialOrd, PartialEq, Eq, Ord)]
-pub struct NetworkId(u32, Peer);
+pub struct NetworkId(pub u32, pub Peer);
 impl NetworkId {
     pub fn new<'w>(me: &crate::Me<'w>) -> Self {
         Self(random_number::random!(), me.get())
@@ -404,7 +404,7 @@ impl NetworkId {
     Debug,
     Default,
 )]
-pub struct Authority(u32);
+pub struct Authority(pub u32);
 impl Component for LocalNet {
     const STORAGE_TYPE: StorageType = StorageType::Table;
 

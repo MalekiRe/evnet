@@ -1,19 +1,26 @@
+use std::time::Duration;
 use avian3d::prelude::*;
 use bevy::prelude::*;
-use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetworkEntityMapper, NetworkId};
+use evnet::component_sync_layer::{DespawnOnDisconnect, LocalNet, NetworkEntityMapper, NetworkId, SyncMsg};
 use evnet::event_layer::{AppExt2, NetworkEventReader, NetworkEventWriter};
 use evnet::message_layer::NetworkMessage;
 use evnet::physics_layer::PhysicsSyncPlugin;
-use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, PeerConnected, Reliability, connected};
+use evnet::{Me, NetworkedCommandExt, NetworkingPlugins, PeerConnected, Reliability, connected, physics_layer};
 use serde::{Deserialize, Serialize};
+use evnet::conditioner::{LinkConditioner, LinkConditionerConfig};
 
 fn main() {
     App::new() // Enable physics
+        /*.insert_resource(LinkConditioner::<SyncMsg<physics_layer::Physics, (Position, Rotation, LinearVelocity, AngularVelocity)>>::new(LinkConditionerConfig {
+            incoming_latency: Duration::new(10, 0),
+            incoming_jitter: Default::default(),
+            incoming_loss: 0.0,
+        }))*/
         .add_plugins((
             DefaultPlugins,
             PhysicsPlugins::default(),
             NetworkingPlugins,
-            PhysicsSyncPlugin::default(),
+            PhysicsSyncPlugin,
         ))
         .add_network_event::<SpawnCube>()
         .add_network_event::<KillCube>()

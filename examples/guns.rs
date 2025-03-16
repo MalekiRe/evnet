@@ -28,7 +28,7 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugins(NetworkingPlugins)
-        .add_plugins(PhysicsSyncPlugin::default())
+        .add_plugins(PhysicsSyncPlugin)
         .add_plugins(PhysicsPlugins::default())
         .add_network_event::<SpawnPlayer>()
         .add_network_event::<SpawnBullet>()
@@ -218,7 +218,7 @@ fn on_press(
         ev.send(SpawnBullet(
             NetworkId::new(&me),
             transform.translation.add(forward.mul(1.0)),
-            forward.mul(100.0)
+            forward.mul(10.0)
         ));
     }
 
